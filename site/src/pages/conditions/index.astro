@@ -1,0 +1,88 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getInjuries, formatCurrency } from '@/lib/api';
+
+const conditions = await getInjuries();
+
+// Group by body region
+const grouped: Record<string, typeof conditions> = {};
+for (const c of conditions) {
+  const region = c.bodyRegion || 'Other';
+  if (!grouped[region]) grouped[region] = [];
+  grouped[region].push(c);
+}
+
+const sortedRegions = Object.entries(grouped).sort((a, b) => b[1].length - a[1].length);
+
+const title = `Medical Condition Treatment Costs — ${conditions.length} Conditions | MedicalCosts.info`;
+const description = `Estimated treatment costs for ${conditions.length} medical conditions across ${Object.keys(grouped).length} body systems. From heart disease to joint replacement to cancer treatment. Based on CMS Medicare data.`;
+---
+
+<Base title={title} description={description} canonical="/conditions/">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Conditions</span>
+    </nav>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Medical Condition Treatment Costs</h1>
+    <p class="text-gray-500 mb-8 max-w-3xl">
+      Estimated costs for treating {conditions.length} medical conditions across {Object.keys(grouped).length} body systems.
+      Each condition includes typical procedures, cost ranges by severity, and Medicare rates.
+    </p>
+
+    <!-- Quick stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div class="text-2xl font-bold text-brand-700">{conditions.length}</div>
+        <div class="text-sm text-gray-500">Conditions</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div class="text-2xl font-bold text-brand-700">{Object.keys(grouped).length}</div>
+        <div class="text-sm text-gray-500">Body Systems</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div class="text-2xl font-bold text-brand-700">21,500+</div>
+        <div class="text-sm text-gray-500">Procedures</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div class="text-2xl font-bold text-brand-700">2026</div>
+        <div class="text-sm text-gray-500">CMS Data Year</div>
+      </div>
+    </div>
+
+    {sortedRegions.map(([region, items]) => (
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">{region}</h2>
+        <p class="text-sm text-gray-500 mb-4">{items.length} conditions</p>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {items.map(c => {
+            const costLow = c.mildCostLow || c.moderateCostLow || 0;
+            const costHigh = c.severeCostHigh || c.moderateCostHigh || 0;
+            return (
+              <a
+                href={`/conditions/${c.slug}/`}
+                class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-500 hover:shadow-md transition-all group"
+              >
+                <h3 class="font-bold text-gray-900 group-hover:text-brand-700 mb-1">{c.name}</h3>
+                {c.description && (
+                  <p class="text-sm text-gray-500 mb-3 line-clamp-2">{c.description}</p>
+                )}
+                <div class="flex items-center justify-between">
+                  {costLow > 0 && costHigh > 0 && (
+                    <span class="text-sm font-semibold text-green-700">
+                      {formatCurrency(costLow)} — {formatCurrency(costHigh)}
+                    </span>
+                  )}
+                  <span class="text-xs text-gray-400">View costs →</span>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </section>
+    ))}
+  </div>
+</Base>

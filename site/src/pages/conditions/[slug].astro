@@ -1,0 +1,226 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getInjury, formatCurrency, formatCurrencyFull, STATES } from '@/lib/api';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/conditions/');
+
+const condition = await getInjury(slug);
+if (!condition) return Astro.redirect('/conditions/');
+
+const c = condition;
+const breakdown = c.treatmentBreakdown || [];
+const severityMap = c.crashSeverityMap || [];
+const totalCost = c.estimatedTotalCost || { low: 0, high: 0 };
+
+const costRange = c.moderateCostLow && c.moderateCostHigh
+  ? `${formatCurrency(c.moderateCostLow)} — ${formatCurrency(c.moderateCostHigh)}`
+  : totalCost.low > 0 ? `${formatCurrency(totalCost.low)} — ${formatCurrency(totalCost.high)}` : 'varies';
+
+const title = `How Much Does ${c.name} Treatment Cost? (${costRange}) — 2026 | MedicalCosts.info`;
+const description = `${c.name} treatment costs: ${costRange}. Detailed breakdown of procedures, Medicare rates, and estimated commercial insurance costs. ${c.bodyRegion ? `${c.bodyRegion} condition.` : ''}`;
+
+const phaseLabels: Record<string, string> = {
+  EMERGENCY: 'Emergency Care', ACUTE: 'Diagnosis & Acute Treatment',
+  SURGICAL: 'Surgery', REHABILITATION: 'Rehabilitation',
+  CHRONIC: 'Ongoing / Chronic Care', LIFETIME: 'Lifetime Needs',
+};
+
+const phaseColors: Record<string, string> = {
+  EMERGENCY: 'border-red-300 bg-red-50', ACUTE: 'border-orange-300 bg-orange-50',
+  SURGICAL: 'border-purple-300 bg-purple-50', REHABILITATION: 'border-blue-300 bg-blue-50',
+  CHRONIC: 'border-yellow-300 bg-yellow-50', LIFETIME: 'border-gray-300 bg-gray-50',
+};
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "MedicalCondition",
+  "name": c.name,
+  "description": c.description,
+  "associatedAnatomy": c.bodyRegion ? { "@type": "AnatomicalStructure", "name": c.bodyRegion } : undefined,
+  "code": c.icd10CodeStart ? { "@type": "MedicalCode", "codingSystem": "ICD-10", "codeValue": c.icd10CodeStart } : undefined,
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": `How much does ${c.name} treatment cost?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `${c.name} treatment typically costs ${costRange} depending on severity. ${breakdown.length > 0 ? `Treatment involves ${breakdown.length} phases including ${breakdown.map(b => phaseLabels[b.phase] || b.phase).join(', ')}.` : ''} Costs are based on CMS Medicare data and vary by location and insurance.` }
+    },
+    {
+      "@type": "Question",
+      "name": `What procedures are used to treat ${c.name}?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `Common procedures for ${c.name} include ${breakdown.flatMap(b => b.procedures.slice(0, 3)).map((p: any) => p.description || p.code).join(', ')}. Each procedure has different costs depending on the care setting.` }
+    },
+  ]
+};
+---
+
+<Base title={title} description={description} canonical={`/conditions/${slug}/`} schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/conditions/" class="hover:text-brand-600">Conditions</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">{c.name}</span>
+    </nav>
+
+    <div class="grid lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-8">
+        <div>
+          {c.bodyRegion && <span class="text-sm text-brand-600 font-medium">{c.bodyRegion}</span>}
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mt-1 mb-4">
+            How Much Does {c.name} Treatment Cost?
+          </h1>
+          <p class="text-lg text-gray-600">{c.description}</p>
+        </div>
+
+        <!-- Cost tiers -->
+        <div class="grid sm:grid-cols-3 gap-4">
+          {c.mildCostLow != null && (
+            <div class="bg-white rounded-xl border border-green-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Mild</div>
+              <div class="text-2xl font-bold text-green-700">{formatCurrency(c.mildCostLow)} — {formatCurrency(c.mildCostHigh || 0)}</div>
+            </div>
+          )}
+          {c.moderateCostLow != null && (
+            <div class="bg-white rounded-xl border-2 border-orange-300 p-5">
+              <div class="text-sm text-gray-500 mb-1">Moderate</div>
+              <div class="text-2xl font-bold text-orange-700">{formatCurrency(c.moderateCostLow)} — {formatCurrency(c.moderateCostHigh || 0)}</div>
+            </div>
+          )}
+          {c.severeCostLow != null && (
+            <div class="bg-white rounded-xl border border-red-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Severe</div>
+              <div class="text-2xl font-bold text-red-700">{formatCurrency(c.severeCostLow)} — {formatCurrency(c.severeCostHigh || 0)}</div>
+            </div>
+          )}
+        </div>
+
+        {totalCost.low > 0 && (
+          <div class="bg-brand-50 border border-brand-200 rounded-xl p-6">
+            <div class="text-sm text-gray-500 mb-1">Estimated Total Procedure-Based Cost</div>
+            <div class="text-3xl font-bold text-brand-700">{formatCurrencyFull(totalCost.low)} — {formatCurrencyFull(totalCost.high)}</div>
+            <div class="text-xs text-gray-400 mt-1">Based on common procedures at commercial insurance rates (1.5x-2.5x Medicare)</div>
+          </div>
+        )}
+
+        <!-- Treatment breakdown by phase -->
+        {breakdown.length > 0 && (
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Treatment Cost Breakdown</h2>
+            <div class="space-y-4">
+              {breakdown.map(phase => (
+                <div class={`rounded-xl border overflow-hidden ${phaseColors[phase.phase] || 'border-gray-200 bg-white'}`}>
+                  <div class="px-6 py-4 flex items-center justify-between">
+                    <div>
+                      <h3 class="font-bold text-gray-900">{phaseLabels[phase.phase] || phase.phase}</h3>
+                      <span class="text-sm text-gray-500">{phase.procedures.length} procedures</span>
+                    </div>
+                    <div class="text-right">
+                      <div class="font-bold text-gray-900">{formatCurrencyFull(phase.subtotalLow)} — {formatCurrencyFull(phase.subtotalHigh)}</div>
+                    </div>
+                  </div>
+                  <div class="bg-white border-t divide-y">
+                    {phase.procedures.map((proc: any) => (
+                      <div class="px-6 py-3 flex items-center justify-between">
+                        <div>
+                          <a href={`/costs/${proc.code}/`} class="text-sm font-medium text-brand-600 hover:underline">
+                            {proc.description || proc.code}
+                          </a>
+                          <div class="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+                            <span>CPT {proc.code}</span>
+                            {proc.typicalQty > 1 && <span>x{proc.typicalQty}</span>}
+                            {proc.frequency && <span>{proc.frequency}</span>}
+                          </div>
+                        </div>
+                        <div class="text-sm text-right">
+                          <div class="text-gray-900">{formatCurrencyFull(proc.estimatedCostLow)} — {formatCurrencyFull(proc.estimatedCostHigh)}</div>
+                          <div class="text-xs text-gray-400">Medicare: {formatCurrencyFull(proc.medicareRate)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <!-- ICD-10 codes -->
+        {c.icd10Codes?.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-3">ICD-10 Diagnosis Codes</h2>
+            <div class="flex flex-wrap gap-2">
+              {c.icd10Codes.map((code: string) => (
+                <span class="px-2 py-1 bg-gray-100 rounded text-xs font-mono text-gray-700">{code}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <!-- FAQ -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 class="text-xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
+          <div class="space-y-4">
+            <div>
+              <h3 class="font-semibold text-gray-900">How much does {c.name} treatment cost?</h3>
+              <p class="text-gray-600 text-sm mt-1">
+                Treatment for {c.name} typically costs {costRange} depending on severity and location.
+                {c.lifetimeCostHigh && c.lifetimeCostHigh > 100000 && ` Severe cases may have lifetime costs up to ${formatCurrency(c.lifetimeCostHigh)}.`}
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900">Does insurance cover {c.name} treatment?</h3>
+              <p class="text-gray-600 text-sm mt-1">
+                Most health insurance plans cover medically necessary treatment for {c.name}. Your out-of-pocket cost depends on your deductible, copay, and whether you use in-network providers.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="space-y-6">
+        <div class="bg-brand-50 rounded-xl p-6 border border-brand-200 sticky top-20">
+          <h3 class="font-bold text-brand-900 mb-3">Condition Details</h3>
+          <dl class="space-y-3 text-sm">
+            {c.bodyRegion && (
+              <div><dt class="text-gray-500">Body System</dt><dd class="font-semibold">{c.bodyRegion}</dd></div>
+            )}
+            {c.icd10CodeStart && (
+              <div><dt class="text-gray-500">ICD-10 Range</dt><dd class="font-mono">{c.icd10CodeStart}{c.icd10CodeEnd ? ` — ${c.icd10CodeEnd}` : ''}</dd></div>
+            )}
+            {c.commonCauses?.length > 0 && (
+              <div>
+                <dt class="text-gray-500">Common Causes</dt>
+                <dd class="mt-1">
+                  {c.commonCauses.map((cause: string) => (
+                    <span class="inline-block px-2 py-0.5 bg-white rounded text-xs mr-1 mb-1">{cause}</span>
+                  ))}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="font-bold text-gray-900 mb-3">Compare Costs</h3>
+          <p class="text-sm text-gray-500 mb-3">See how costs vary by state</p>
+          <div class="grid grid-cols-5 gap-1">
+            {STATES.slice(0, 15).map(s => (
+              <a href={`/states/${s.code.toLowerCase()}/`} class="text-xs text-center py-1 text-brand-600 hover:bg-brand-50 rounded">{s.code}</a>
+            ))}
+          </div>
+          <a href="/states/" class="text-xs text-brand-600 hover:underline mt-2 block">All states →</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+</Base>
