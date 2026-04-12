@@ -611,6 +611,52 @@ export async function getGlp1Drugs() {
   return fetchApi<any>('/drugs/glp1');
 }
 
+// Hospital quality (CMS Hospital Compare)
+export interface HospitalQuality {
+  providerId: string;
+  hospitalName: string;
+  city: string;
+  state: string;
+  zip: string;
+  overallRating: number | null;
+  patientExperienceRating: string;
+  readmissionRating: string;
+  mortalityRating: string;
+  safetyRating: string;
+  timelinessRating: string;
+  effectivenessRating: string;
+  hospitalType: string;
+  ownership: string;
+  emergencyServices: string;
+}
+
+export interface HospitalQualityResponse {
+  quality: HospitalQuality;
+  stateAverage: { avgRating: number; totalRatedHospitals: number; fiveStarCount: number; oneStarCount: number };
+  nationalAverage: { avgRating: number; totalRatedHospitals: number; fiveStarCount: number };
+  source: string;
+  disclaimer: string;
+}
+
+export async function getHospitalQuality(providerId: string): Promise<HospitalQualityResponse | null> {
+  return fetchApi<HospitalQualityResponse>(`/hospitals/${providerId}/quality`);
+}
+
+export interface BestHospitalsResponse {
+  hospitals: Array<HospitalQuality>;
+  ratingDistribution: Array<{ rating: number; count: number }>;
+  filters: { state: string; minRating: number; limit: number };
+  source: string;
+}
+
+export async function getBestHospitals(params: { state?: string; rating?: number; limit?: number } = {}): Promise<BestHospitalsResponse | null> {
+  const qs = new URLSearchParams();
+  if (params.state) qs.set('state', params.state);
+  if (params.rating) qs.set('rating', String(params.rating));
+  if (params.limit) qs.set('limit', String(params.limit));
+  return fetchApi<BestHospitalsResponse>(`/hospitals/best?${qs}`);
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
