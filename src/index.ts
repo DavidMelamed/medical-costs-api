@@ -81,8 +81,12 @@ export default {
       if (path === "/api/compare") return handleCompare(url, env, cors);
       if (path === "/api/statistics") return handleStatistics(env, cors);
       if (path === "/api/categories") return handleCategories(env, cors);
+      if (path === "/api/drg") return handleDrgList(url, env, cors);
 
       // Parameterized routes
+      const drgMatch = path.match(/^\/api\/drg\/([^/]+)$/);
+      if (drgMatch) return handleDrgDetail(decodeURIComponent(drgMatch[1]), env, cors);
+
       const procMatch = path.match(/^\/api\/procedures\/([^/]+)$/);
       if (procMatch) return handleProcedureDetail(decodeURIComponent(procMatch[1]), env, cors);
 
@@ -121,6 +125,8 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/compare",
         "GET /api/statistics",
         "GET /api/categories",
+        "GET /api/drg",
+        "GET /api/drg/:code",
       ],
     },
     cors,
@@ -696,6 +702,112 @@ async function handleCategories(env: Env, cors: Record<string, string>): Promise
   ]);
 
   return success({ categories: categories.results, bodySystems: bodySystems.results }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/drg — List all DRGs
+// ---------------------------------------------------------------------------
+
+async function handleDrgList(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const search = url.searchParams.get("search");
+  const type = url.searchParams.get("type"); // SURG or MED
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 1), 500);
+  const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+
+  // Get DRGs from CMS_MSDRG source (has best coverage with payment + LOS)
+  const conditions: string[] = ["source = 'CMS_MSDRG'"];
+  const params: unknown[] = [];
+
+  if (search) {
+    conditions.push(`(drg_code LIKE ?${params.length + 1} OR drg_description LIKE ?${params.length + 1})`);
+    params.push(`%${search}%`);
+  }
+  if (type) {
+    conditions.push(`severity = ?${params.length + 1}`);
+    params.push(type);
+  }
+
+  const where = `WHERE ${conditions.join(" AND ")}`;
+
+  const countResult = await env.DB.prepare(
+    `SELECT COUNT(*) as total FROM drg_cost_data ${where}`
+  ).bind(...params).first<{ total: number }>();
+  const total = countResult?.total ?? 0;
+
+  const { results } = await env.DB.prepare(
+    `SELECT
+       drg_code AS drgCode, drg_description AS description, severity AS type,
+       avg_length_of_stay AS avgLengthOfStay,
+       avg_medicare_payment AS avgMedicarePayment,
+       avg_total_charges AS avgTotalCharges,
+       avg_total_costs AS avgTotalCosts,
+       total_discharges AS totalDischarges,
+       year, source
+     FROM drg_cost_data ${where}
+     ORDER BY drg_code
+     LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`
+  ).bind(...params, limit, offset).all();
+
+  return success(results, cors, { pagination: { total, limit, offset } });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/drg/:code — DRG detail
+// ---------------------------------------------------------------------------
+
+async function handleDrgDetail(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  // Get CMS MS-DRG data (weights, LOS, payment)
+  const msdrg = await env.DB.prepare(
+    `SELECT
+       drg_code AS drgCode, drg_description AS description, severity AS type,
+       avg_length_of_stay AS avgLengthOfStay,
+       avg_medicare_payment AS avgMedicarePayment,
+       total_discharges AS totalDischarges,
+       year, source
+     FROM drg_cost_data
+     WHERE drg_code = ?1 AND source = 'CMS_MSDRG'`
+  ).bind(code).first();
+
+  if (!msdrg) return error("DRG not found", 404, cors);
+
+  // Get CMS Inpatient national data
+  const cmsInpatient = await env.DB.prepare(
+    `SELECT
+       drg_code AS drgCode, drg_description AS description,
+       total_discharges AS totalDischarges,
+       avg_total_charges AS avgTotalCharges,
+       avg_total_costs AS avgTotalCosts,
+       avg_medicare_payment AS avgMedicarePayment,
+       year, source
+     FROM drg_cost_data
+     WHERE drg_code = ?1 AND source = 'CMS_INPATIENT'`
+  ).bind(code).first();
+
+  // Get NY SPARCS data by severity
+  const { results: sparcsData } = await env.DB.prepare(
+    `SELECT
+       severity,
+       total_discharges AS totalDischarges,
+       avg_length_of_stay AS avgLengthOfStay,
+       avg_total_charges AS avgTotalCharges,
+       avg_total_costs AS avgTotalCosts,
+       median_charges AS medianCharges,
+       median_costs AS medianCosts,
+       year
+     FROM drg_cost_data
+     WHERE drg_code = ?1 AND source = 'NY_SPARCS'
+     ORDER BY severity`
+  ).bind(code).all();
+
+  return success(
+    {
+      ...msdrg,
+      cmsInpatient: cmsInpatient || null,
+      nySparcs: sparcsData,
+      disclaimer: DISCLAIMER,
+    },
+    cors,
+  );
 }
 
 // ---------------------------------------------------------------------------

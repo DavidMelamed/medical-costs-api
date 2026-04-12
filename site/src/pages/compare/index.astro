@@ -1,0 +1,124 @@
+---
+import Base from '@/layouts/Base.astro';
+import { STATES } from '@/lib/api';
+
+const title = 'Compare Medical Costs by State — Side-by-Side Price Comparison | MedicalCosts.info';
+const description = 'Compare medical procedure costs across states. See how Medicare rates, hospital prices, and commercial insurance estimates vary by location.';
+---
+
+<Base title={title} description={description} canonical="/compare/">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Compare Costs</span>
+    </nav>
+
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Compare Medical Costs by State</h1>
+    <p class="text-gray-500 mb-8">
+      Enter a CPT code and select states to compare costs side by side.
+    </p>
+
+    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Procedure (CPT Code)</label>
+          <input id="cpt-input" type="text" placeholder="e.g., 99285, 72148" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">States (comma-separated)</label>
+          <input id="states-input" type="text" value="CO,CA,NY,TX,FL" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div class="flex items-end">
+          <button id="compare-btn" class="w-full px-6 py-3 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-colors">
+            Compare
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="compare-results"></div>
+
+    <div class="mt-8 bg-gray-50 rounded-xl p-6">
+      <h2 class="font-bold text-gray-900 mb-3">Popular Comparisons</h2>
+      <div class="grid sm:grid-cols-2 gap-2">
+        <button onclick="runCompare('99285', 'CO,CA,NY,TX,FL')" class="text-left text-sm text-brand-600 hover:underline">ER Visit (99285) — CO vs CA vs NY vs TX vs FL</button>
+        <button onclick="runCompare('72148', 'CO,CA,NY,TX,FL')" class="text-left text-sm text-brand-600 hover:underline">MRI Lumbar (72148) — 5-State Comparison</button>
+        <button onclick="runCompare('27427', 'CA,NY,TX,FL,IL')" class="text-left text-sm text-brand-600 hover:underline">ACL Surgery (27427) — Major States</button>
+        <button onclick="runCompare('97110', 'CO,CA,NY,TX,FL')" class="text-left text-sm text-brand-600 hover:underline">Physical Therapy (97110) — 5-State Comparison</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'https://medical-costs-api.david-568.workers.dev/api';
+
+    function fmt(n: number | null) {
+      if (!n) return '—';
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    }
+
+    async function runCompare(code: string, states: string) {
+      (document.getElementById('cpt-input') as HTMLInputElement).value = code;
+      (document.getElementById('states-input') as HTMLInputElement).value = states;
+
+      const resultsDiv = document.getElementById('compare-results')!;
+      resultsDiv.innerHTML = '<p class="text-gray-500">Loading comparison...</p>';
+
+      try {
+        const res = await fetch(`${API}/compare?code=${code}&states=${states}`);
+        const json = await res.json();
+        if (!json.success) { resultsDiv.innerHTML = '<p class="text-red-500">Error loading data.</p>'; return; }
+
+        const { procedure, states: stateData } = json.data;
+
+        let rows = '';
+        for (const [stateCode, locations] of Object.entries(stateData as Record<string, any[]>)) {
+          for (const loc of locations) {
+            rows += `
+              <tr class="border-b hover:bg-gray-50">
+                <td class="px-4 py-3 font-medium">${stateCode} ${loc.locality ? '— ' + loc.locality : ''}</td>
+                <td class="px-4 py-3 text-right font-semibold">${fmt(loc.facilityRate)}</td>
+                <td class="px-4 py-3 text-right text-gray-600">${fmt(loc.estimatedCommercialLow)}</td>
+                <td class="px-4 py-3 text-right text-orange-700">${fmt(loc.estimatedCommercialHigh)}</td>
+              </tr>
+            `;
+          }
+        }
+
+        resultsDiv.innerHTML = `
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 bg-gray-50 border-b">
+              <h2 class="text-xl font-bold">
+                <a href="/costs/${procedure.code}/" class="text-brand-600 hover:underline">${procedure.description}</a>
+                <span class="text-sm font-normal text-gray-500 ml-2">CPT ${procedure.code}</span>
+              </h2>
+              <p class="text-sm text-gray-500">National Medicare rate: ${fmt(procedure.nationalMedicareRate)}</p>
+            </div>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b text-xs text-gray-500 uppercase">
+                  <th class="px-4 py-2 text-left">Location</th>
+                  <th class="px-4 py-2 text-right">Medicare Rate</th>
+                  <th class="px-4 py-2 text-right">Est. Commercial (Low)</th>
+                  <th class="px-4 py-2 text-right">Est. Commercial (High)</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      } catch {
+        resultsDiv.innerHTML = '<p class="text-red-500">Error loading comparison.</p>';
+      }
+    }
+
+    (window as any).runCompare = runCompare;
+
+    document.getElementById('compare-btn')!.addEventListener('click', () => {
+      const code = (document.getElementById('cpt-input') as HTMLInputElement).value.trim();
+      const states = (document.getElementById('states-input') as HTMLInputElement).value.trim();
+      if (code) runCompare(code, states);
+    });
+  </script>
+</Base>

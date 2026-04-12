@@ -143,6 +143,93 @@ export function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// Drug-specific helpers
+export async function getDrugs(params: {
+  search?: string;
+  category?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ data: Procedure[]; pagination: { total: number; limit: number; offset: number } }> {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set('search', params.search);
+  qs.set('category', params.category || 'Prescription Drug');
+  qs.set('limit', String(params.limit || 50));
+  qs.set('offset', String(params.offset || 0));
+
+  // Category with space means "starts with" — use the exact category names
+  // For "all drugs" we search both brand and generic by using a search with category filter
+  const res = await fetch(`${API_BASE}/api/procedures?${qs}`);
+  const json = await res.json();
+  return { data: json.data || [], pagination: json.pagination || { total: 0, limit: 50, offset: 0 } };
+}
+
+export async function getBrandDrugs(params: { limit?: number; offset?: number } = {}) {
+  return getDrugs({ ...params, category: 'Prescription Drug - Brand' });
+}
+
+export async function getGenericDrugs(params: { limit?: number; offset?: number } = {}) {
+  return getDrugs({ ...params, category: 'Prescription Drug - Generic' });
+}
+
+export async function getDrug(code: string): Promise<Procedure | null> {
+  return fetchApi<Procedure>(`/procedures/${code}`);
+}
+
+// DRG helpers
+export interface DrgSummary {
+  drgCode: string;
+  description: string;
+  type: string;
+  avgLengthOfStay: number | null;
+  avgMedicarePayment: number | null;
+  avgTotalCharges: number | null;
+  avgTotalCosts: number | null;
+  totalDischarges: number | null;
+  year: number;
+  source: string;
+}
+
+export interface DrgDetail extends DrgSummary {
+  cmsInpatient: {
+    totalDischarges: number | null;
+    avgTotalCharges: number | null;
+    avgTotalCosts: number | null;
+    avgMedicarePayment: number | null;
+    year: number;
+  } | null;
+  nySparcs: Array<{
+    severity: string;
+    totalDischarges: number | null;
+    avgLengthOfStay: number | null;
+    avgTotalCharges: number | null;
+    avgTotalCosts: number | null;
+    medianCharges: number | null;
+    medianCosts: number | null;
+    year: number;
+  }>;
+}
+
+export async function getDrgList(params: {
+  search?: string;
+  type?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ data: DrgSummary[]; pagination: { total: number; limit: number; offset: number } }> {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set('search', params.search);
+  if (params.type) qs.set('type', params.type);
+  qs.set('limit', String(params.limit || 100));
+  qs.set('offset', String(params.offset || 0));
+
+  const res = await fetch(`${API_BASE}/api/drg?${qs}`);
+  const json = await res.json();
+  return { data: json.data || [], pagination: json.pagination || { total: 0, limit: 100, offset: 0 } };
+}
+
+export async function getDrg(code: string): Promise<DrgDetail | null> {
+  return fetchApi<DrgDetail>(`/drg/${code}`);
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
