@@ -1,0 +1,210 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getDrugs, getBrandDrugs, getGenericDrugs, formatCurrencyFull } from '@/lib/api';
+
+const search = Astro.url.searchParams.get('search') || '';
+const type = Astro.url.searchParams.get('type') || '';
+const page = parseInt(Astro.url.searchParams.get('page') || '1');
+const limit = 50;
+const offset = (page - 1) * limit;
+
+let data, pagination;
+
+if (search) {
+  // Search across all drugs
+  const result = await getDrugs({ search, limit, offset });
+  data = result.data;
+  pagination = result.pagination;
+} else if (type === 'brand') {
+  const result = await getBrandDrugs({ limit, offset });
+  data = result.data;
+  pagination = result.pagination;
+} else if (type === 'generic') {
+  const result = await getGenericDrugs({ limit, offset });
+  data = result.data;
+  pagination = result.pagination;
+} else {
+  // Default: show all drugs
+  const result = await getDrugs({ limit, offset });
+  data = result.data;
+  pagination = result.pagination;
+}
+
+const totalPages = Math.ceil((pagination?.total || 0) / limit);
+
+const title = search
+  ? `"${search}" Drug Prices — ${pagination.total} Results | MedicalCosts.info`
+  : type === 'brand'
+    ? `Brand Name Drug Prices — ${pagination.total?.toLocaleString()} Medications | MedicalCosts.info`
+    : type === 'generic'
+      ? `Generic Drug Prices — ${pagination.total?.toLocaleString()} Medications | MedicalCosts.info`
+      : `Prescription Drug Prices — 10,000+ Medications | MedicalCosts.info`;
+
+const description = search
+  ? `Find NADAC pharmacy acquisition costs for "${search}". Compare brand and generic drug prices from CMS data.`
+  : `Compare prescription drug costs for ${pagination.total?.toLocaleString()}+ medications. NADAC pharmacy acquisition prices for brand and generic drugs from CMS 2026 data.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "name": "Prescription Drug Prices",
+  "url": "https://medicalcosts.info/drugs/",
+  "description": description,
+  "provider": {
+    "@type": "Organization",
+    "name": "MedicalCosts.info"
+  }
+};
+
+function formatNadacPrice(rate: number | null): string {
+  if (rate == null) return 'N/A';
+  if (rate < 0.01) return '<$0.01';
+  if (rate < 1) return `$${rate.toFixed(4)}`;
+  return `$${rate.toFixed(2)}`;
+}
+
+function drugDisplayName(desc: string): string {
+  // Capitalize first letter of each word, leave dosage as-is
+  return desc.split(' ').map((w, i) => {
+    if (i === 0) return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    if (/^\d/.test(w) || ['MG', 'ML', 'MCG', 'GM', 'TAB', 'CAP', 'SOLN', 'SUSP', 'INJ', 'TABLET', 'CAPSULE'].includes(w.toUpperCase())) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
+}
+---
+
+<Base title={title} description={description} canonical="/drugs/" schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumbs -->
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Drug Prices</span>
+    </nav>
+
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+      {search ? `Drug Prices for "${search}"` : type === 'brand' ? 'Brand Name Drug Prices' : type === 'generic' ? 'Generic Drug Prices' : 'Prescription Drug Prices'}
+    </h1>
+    <p class="text-gray-500 mb-8">
+      {pagination.total?.toLocaleString()} medications with NADAC pharmacy acquisition costs from CMS
+    </p>
+
+    <!-- Search -->
+    <form action="/drugs/" method="GET" class="flex gap-2 max-w-xl mb-6">
+      <input
+        type="text"
+        name="search"
+        value={search}
+        placeholder="Search by drug name (e.g. metformin, lisinopril, atorvastatin)..."
+        class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+      />
+      <button type="submit" class="px-6 py-3 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700">Search</button>
+    </form>
+
+    <!-- Type filter pills -->
+    <div class="flex flex-wrap gap-2 mb-8">
+      <a
+        href="/drugs/"
+        class={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${!type && !search ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+      >All Drugs</a>
+      <a
+        href="/drugs/?type=generic"
+        class={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${type === 'generic' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'}`}
+      >Generic</a>
+      <a
+        href="/drugs/?type=brand"
+        class={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${type === 'brand' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}`}
+      >Brand Name</a>
+    </div>
+
+    <!-- Results table -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+        <div class="col-span-5">Drug Name</div>
+        <div class="col-span-2">Type</div>
+        <div class="col-span-2 text-right">NADAC / Unit</div>
+        <div class="col-span-3 text-right">Est. 30-Day Supply</div>
+      </div>
+
+      {data.map(drug => {
+        const isBrand = drug.category === 'Prescription Drug - Brand';
+        const nadacPerUnit = drug.nationalFacilityRate || drug.nationalNonFacRate;
+        const est30Day = nadacPerUnit ? nadacPerUnit * 30 : null;
+        return (
+          <a
+            href={`/drugs/${drug.code}/`}
+            class="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 hover:bg-blue-50 transition-colors items-center group"
+          >
+            <div class="col-span-12 md:col-span-5">
+              <span class="text-sm font-medium text-gray-900 group-hover:text-brand-700">{drugDisplayName(drug.description)}</span>
+            </div>
+            <div class="col-span-6 md:col-span-2">
+              <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isBrand ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                {isBrand ? 'Brand' : 'Generic'}
+              </span>
+            </div>
+            <div class="col-span-3 md:col-span-2 text-right">
+              <span class="text-sm font-semibold text-gray-900">
+                {nadacPerUnit != null ? formatNadacPrice(nadacPerUnit) : '—'}
+              </span>
+            </div>
+            <div class="col-span-3 md:col-span-3 text-right">
+              <span class="text-sm text-gray-600">
+                {est30Day != null ? formatCurrencyFull(Math.round(est30Day * 100) / 100) : '—'}
+              </span>
+              <span class="text-xs text-gray-400 ml-1">est.</span>
+            </div>
+          </a>
+        );
+      })}
+
+      {data.length === 0 && (
+        <div class="px-6 py-12 text-center text-gray-500">
+          <p class="text-lg">No drugs found{search ? ` for "${search}"` : ''}.</p>
+          <a href="/drugs/" class="text-brand-600 hover:underline mt-2 inline-block">Clear filters</a>
+        </div>
+      )}
+    </div>
+
+    <!-- Pagination -->
+    {totalPages > 1 && (
+      <div class="flex justify-center gap-2 mt-8">
+        {page > 1 && (
+          <a href={`/drugs/?${new URLSearchParams({ ...(search ? { search } : {}), ...(type ? { type } : {}), page: String(page - 1) })}`}
+             class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&larr; Previous</a>
+        )}
+        <span class="px-4 py-2 text-sm text-gray-500">Page {page} of {totalPages}</span>
+        {page < totalPages && (
+          <a href={`/drugs/?${new URLSearchParams({ ...(search ? { search } : {}), ...(type ? { type } : {}), page: String(page + 1) })}`}
+             class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Next &rarr;</a>
+        )}
+      </div>
+    )}
+
+    <!-- Info Section -->
+    <div class="mt-12 bg-gray-50 rounded-xl p-8">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">About NADAC Drug Pricing</h2>
+      <p class="text-gray-600 mb-4">
+        The <strong>National Average Drug Acquisition Cost (NADAC)</strong> represents what pharmacies actually pay to acquire medications
+        from wholesalers and manufacturers. Published weekly by CMS (Centers for Medicare & Medicaid Services), NADAC prices are
+        the most transparent indicator of true drug costs in the United States.
+      </p>
+      <div class="grid md:grid-cols-2 gap-6 mt-6">
+        <div>
+          <h3 class="font-semibold text-gray-900 mb-2">Generic vs. Brand Name</h3>
+          <p class="text-sm text-gray-600">
+            Generic drugs contain the same active ingredient as their brand-name counterparts but typically cost 80-85% less.
+            The NADAC per-unit cost shown here reflects the pharmacy's acquisition cost, not the retail price you pay at the counter.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 mb-2">What You Actually Pay</h3>
+          <p class="text-sm text-gray-600">
+            Your actual cost depends on insurance coverage, pharmacy markup, and dispensing fees. Without insurance,
+            expect to pay 20-50% above NADAC. With insurance, your copay is often a flat fee ($5-$50) regardless of NADAC cost.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Base>

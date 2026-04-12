@@ -1,0 +1,353 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getDrg, formatCurrencyFull } from '@/lib/api';
+
+const { code } = Astro.params;
+if (!code) return Astro.redirect('/drg/');
+
+const drg = await getDrg(code);
+if (!drg) return Astro.redirect('/drg/');
+
+const d = drg as any;
+const isSurgical = d.type === 'SURG';
+const avgPayment = d.avgMedicarePayment || d.cmsInpatient?.avgMedicarePayment || 0;
+const avgCharges = d.cmsInpatient?.avgTotalCharges || 0;
+const avgCosts = d.cmsInpatient?.avgTotalCosts || 0;
+const avgLos = d.avgLengthOfStay || 0;
+const totalDischarges = d.cmsInpatient?.totalDischarges || d.totalDischarges || 0;
+const sparcsData = d.nySparcs || [];
+
+// Clean up description for display
+function titleCase(str: string): string {
+  return str.split(' ').map((w: string) => {
+    if (['OR', 'OF', 'AND', 'IN', 'THE', 'TO', 'FOR', 'AT', 'BY', 'AN', 'ON', 'WITH', 'WITHOUT', 'W', 'W/O', 'MCC', 'CC', 'CC/MCC', 'O.R.'].includes(w.toUpperCase())) {
+      return w.toUpperCase() === 'MCC' || w.toUpperCase() === 'CC' || w.toUpperCase() === 'CC/MCC' || w.toUpperCase() === 'O.R.'
+        ? w.toUpperCase()
+        : w.toLowerCase();
+    }
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
+}
+
+const displayDesc = titleCase(d.description || '');
+const shortDesc = displayDesc.length > 80 ? displayDesc.substring(0, 80) + '...' : displayDesc;
+
+const title = `DRG ${code}: ${shortDesc} — Average Hospital Cost ${avgPayment ? formatCurrencyFull(Math.round(avgPayment)) : 'See Details'} | MedicalCosts.info`;
+const description = `DRG ${code} (${displayDesc}) average Medicare payment: ${avgPayment ? formatCurrencyFull(Math.round(avgPayment)) : 'varies'}. Average length of stay: ${avgLos} days. ${isSurgical ? 'Surgical' : 'Medical'} DRG with ${totalDischarges ? totalDischarges.toLocaleString() + ' annual Medicare discharges' : 'national data'}.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "MedicalProcedure",
+  "name": `DRG ${code}: ${displayDesc}`,
+  "procedureType": isSurgical ? "SurgicalProcedure" : "DiagnosticProcedure",
+  ...(avgPayment && {
+    "offers": {
+      "@type": "Offer",
+      "price": Math.round(avgPayment),
+      "priceCurrency": "USD",
+      "description": "Average Medicare payment",
+    }
+  }),
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": `How much does a hospital stay for ${shortDesc.toLowerCase()} cost?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `DRG ${code} (${displayDesc}) has an average Medicare payment of ${avgPayment ? formatCurrencyFull(Math.round(avgPayment)) : 'variable'}${avgCosts ? ` and average total costs of ${formatCurrencyFull(Math.round(avgCosts))}` : ''}. The average length of stay is ${avgLos} days. Actual costs depend on hospital location, complications, and insurance coverage.`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": `How long is the average hospital stay for DRG ${code}?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `The average length of stay for DRG ${code} (${displayDesc}) is ${avgLos} days. This can vary based on severity, complications, and patient health status.${sparcsData.length > 0 ? ` NY SPARCS data shows stays ranging from ${Math.min(...sparcsData.map((s: any) => s.avgLengthOfStay || 999))} to ${Math.max(...sparcsData.map((s: any) => s.avgLengthOfStay || 0))} days depending on severity.` : ''}`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": `How much does a hospital stay for DRG ${code} cost without insurance?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Without insurance, hospital charges for DRG ${code} average ${avgCharges ? formatCurrencyFull(Math.round(avgCharges)) : '2-5x the Medicare rate'}, though actual costs average ${avgCosts ? formatCurrencyFull(Math.round(avgCosts)) : 'less'}. Medicare pays ${avgPayment ? formatCurrencyFull(Math.round(avgPayment)) : 'a negotiated rate'}. Uninsured patients should request an itemized bill and negotiate — hospitals often offer 40-60% discounts for self-pay patients.`
+      }
+    },
+  ]
+};
+
+// Estimate commercial insurance range
+const commercialLow = avgPayment ? Math.round(avgPayment * 1.5) : null;
+const commercialHigh = avgPayment ? Math.round(avgPayment * 2.5) : null;
+---
+
+<Base title={title} description={description} canonical={`/drg/${code}/`} schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumbs -->
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/drg/" class="hover:text-brand-600">Hospital Stay Costs</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">DRG {code}</span>
+    </nav>
+
+    <div class="grid lg:grid-cols-3 gap-8">
+      <!-- Main Content -->
+      <div class="lg:col-span-2 space-y-8">
+        <!-- Header -->
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="px-3 py-1 bg-brand-100 text-brand-700 text-sm font-semibold rounded-full">DRG {code}</span>
+            <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isSurgical ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+              {isSurgical ? 'Surgical' : 'Medical'}
+            </span>
+          </div>
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+            {displayDesc}
+          </h1>
+          <p class="text-gray-500">Hospital inpatient stay cost data from CMS</p>
+        </div>
+
+        <!-- Cost Cards -->
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {avgPayment > 0 && (
+            <div class="bg-white rounded-xl border-2 border-brand-500 p-5">
+              <div class="text-sm text-gray-500 mb-1">Avg Medicare Payment</div>
+              <div class="text-3xl font-bold text-brand-700">{formatCurrencyFull(Math.round(avgPayment))}</div>
+              <div class="text-xs text-gray-400 mt-1">National average</div>
+            </div>
+          )}
+          {avgCosts > 0 && (
+            <div class="bg-white rounded-xl border border-gray-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Avg Total Costs</div>
+              <div class="text-2xl font-bold text-gray-900">{formatCurrencyFull(Math.round(avgCosts))}</div>
+              <div class="text-xs text-gray-400 mt-1">CMS Inpatient data</div>
+            </div>
+          )}
+          {avgLos > 0 && (
+            <div class="bg-white rounded-xl border border-gray-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Avg Length of Stay</div>
+              <div class="text-2xl font-bold text-gray-900">{avgLos} <span class="text-base font-normal text-gray-500">days</span></div>
+              <div class="text-xs text-gray-400 mt-1">CMS MS-DRG</div>
+            </div>
+          )}
+          {commercialLow && (
+            <div class="bg-white rounded-xl border border-orange-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Est. Commercial Insurance</div>
+              <div class="text-2xl font-bold text-orange-700">
+                {formatCurrencyFull(commercialLow)} — {formatCurrencyFull(commercialHigh!)}
+              </div>
+              <div class="text-xs text-gray-400 mt-1">1.5x — 2.5x Medicare</div>
+            </div>
+          )}
+          {totalDischarges > 0 && (
+            <div class="bg-white rounded-xl border border-gray-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Annual Discharges</div>
+              <div class="text-2xl font-bold text-gray-900">{totalDischarges.toLocaleString()}</div>
+              <div class="text-xs text-gray-400 mt-1">Medicare beneficiaries</div>
+            </div>
+          )}
+        </div>
+
+        <!-- CMS Inpatient Data -->
+        {d.cmsInpatient && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">CMS Inpatient National Data</h2>
+            <p class="text-sm text-gray-500 mb-4">From CMS Medicare Provider Utilization & Payment Data (FY {d.cmsInpatient.year})</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {d.cmsInpatient.totalDischarges > 0 && (
+                <div class="text-center p-3 bg-gray-50 rounded-lg">
+                  <div class="text-2xl font-bold text-gray-900">{d.cmsInpatient.totalDischarges.toLocaleString()}</div>
+                  <div class="text-xs text-gray-500">Total Discharges</div>
+                </div>
+              )}
+              {d.cmsInpatient.avgTotalCosts > 0 && (
+                <div class="text-center p-3 bg-gray-50 rounded-lg">
+                  <div class="text-2xl font-bold text-gray-900">{formatCurrencyFull(Math.round(d.cmsInpatient.avgTotalCosts))}</div>
+                  <div class="text-xs text-gray-500">Avg Total Costs</div>
+                </div>
+              )}
+              {d.cmsInpatient.avgMedicarePayment > 0 && (
+                <div class="text-center p-3 bg-brand-50 rounded-lg">
+                  <div class="text-2xl font-bold text-brand-700">{formatCurrencyFull(Math.round(d.cmsInpatient.avgMedicarePayment))}</div>
+                  <div class="text-xs text-brand-600">Avg Medicare Payment</div>
+                </div>
+              )}
+              {d.cmsInpatient.avgTotalCharges > 0 && (
+                <div class="text-center p-3 bg-gray-50 rounded-lg">
+                  <div class="text-2xl font-bold text-gray-900">{formatCurrencyFull(Math.round(d.cmsInpatient.avgTotalCharges))}</div>
+                  <div class="text-xs text-gray-500">Avg Total Charges</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <!-- NY SPARCS Data by Severity -->
+        {sparcsData.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Cost by Severity Level</h2>
+            <p class="text-sm text-gray-500 mb-4">NY SPARCS hospital discharge data ({sparcsData[0].year}) — costs reflect New York State hospitals</p>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b text-left text-gray-500">
+                    <th class="pb-2 font-medium">Severity</th>
+                    <th class="pb-2 font-medium text-right">Discharges</th>
+                    <th class="pb-2 font-medium text-right">Avg LOS</th>
+                    <th class="pb-2 font-medium text-right">Avg Charges</th>
+                    <th class="pb-2 font-medium text-right">Avg Costs</th>
+                    <th class="pb-2 font-medium text-right">Median Costs</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  {sparcsData.map((s: any) => (
+                    <tr class="hover:bg-gray-50">
+                      <td class="py-2">
+                        <span class={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                          s.severity === 'Minor' ? 'bg-green-100 text-green-700' :
+                          s.severity === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
+                          s.severity === 'Major' ? 'bg-orange-100 text-orange-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {s.severity}
+                        </span>
+                      </td>
+                      <td class="py-2 text-right">{s.totalDischarges?.toLocaleString() || '—'}</td>
+                      <td class="py-2 text-right">{s.avgLengthOfStay ? `${s.avgLengthOfStay} days` : '—'}</td>
+                      <td class="py-2 text-right font-semibold">{s.avgTotalCharges ? formatCurrencyFull(Math.round(s.avgTotalCharges)) : '—'}</td>
+                      <td class="py-2 text-right">{s.avgTotalCosts ? formatCurrencyFull(Math.round(s.avgTotalCosts)) : '—'}</td>
+                      <td class="py-2 text-right text-gray-600">{s.medianCosts ? formatCurrencyFull(Math.round(s.medianCosts)) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <!-- FAQ -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 class="text-xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
+          <div class="space-y-4">
+            <div>
+              <h3 class="font-semibold text-gray-900">How much does a hospital stay for {shortDesc.toLowerCase()} cost?</h3>
+              <p class="text-gray-600 text-sm mt-1">
+                The average Medicare payment for DRG {code} is {avgPayment ? formatCurrencyFull(Math.round(avgPayment)) : 'variable'}.
+                {avgCosts ? ` Average hospital costs are ${formatCurrencyFull(Math.round(avgCosts))}.` : ''}
+                Commercial insurance typically pays 150-250% of Medicare rates
+                {commercialLow ? ` (${formatCurrencyFull(commercialLow)} — ${formatCurrencyFull(commercialHigh!)})` : ''}.
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900">How long is the hospital stay for DRG {code}?</h3>
+              <p class="text-gray-600 text-sm mt-1">
+                The average length of stay is {avgLos} days. This varies by severity —
+                {sparcsData.length > 0
+                  ? ` NY data shows stays from ${Math.min(...sparcsData.map((s: any) => s.avgLengthOfStay || 999)).toFixed(1)} to ${Math.max(...sparcsData.map((s: any) => s.avgLengthOfStay || 0)).toFixed(1)} days depending on severity.`
+                  : ' patients with complications or comorbidities may stay longer.'
+                }
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900">How much does this hospital stay cost without insurance?</h3>
+              <p class="text-gray-600 text-sm mt-1">
+                Without insurance, you may be billed the hospital's chargemaster rate, which can be 3-5x the actual cost.
+                {avgCharges ? ` Average charges for DRG ${code} are ${formatCurrencyFull(Math.round(avgCharges))}.` : ''}
+                Request an itemized bill and ask about financial assistance programs.
+                Many hospitals offer 40-60% discounts for self-pay patients.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="space-y-6">
+        <div class="bg-brand-50 rounded-xl p-6 border border-brand-200">
+          <h3 class="font-bold text-brand-900 mb-3">DRG Details</h3>
+          <dl class="space-y-3 text-sm">
+            <div>
+              <dt class="text-gray-500">DRG Code</dt>
+              <dd class="font-mono font-bold text-lg">{code}</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500">Type</dt>
+              <dd>
+                <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isSurgical ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {isSurgical ? 'Surgical' : 'Medical'}
+                </span>
+              </dd>
+            </div>
+            {avgPayment > 0 && (
+              <div>
+                <dt class="text-gray-500">Avg Medicare Payment</dt>
+                <dd class="font-bold text-brand-700">{formatCurrencyFull(Math.round(avgPayment))}</dd>
+              </div>
+            )}
+            {avgLos > 0 && (
+              <div>
+                <dt class="text-gray-500">Avg Length of Stay</dt>
+                <dd class="font-bold">{avgLos} days</dd>
+              </div>
+            )}
+            <div>
+              <dt class="text-gray-500">Data Sources</dt>
+              <dd class="text-xs">CMS MS-DRG (FY {d.year}){d.cmsInpatient ? `, CMS Inpatient (FY ${d.cmsInpatient.year})` : ''}{sparcsData.length > 0 ? `, NY SPARCS (${sparcsData[0].year})` : ''}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="font-bold text-gray-900 mb-3">Related</h3>
+          <ul class="space-y-2 text-sm">
+            <li>
+              <a href="/drg/" class="text-brand-600 hover:underline">Browse All DRGs</a>
+            </li>
+            <li>
+              <a href={`/drg/?type=${isSurgical ? 'SURG' : 'MED'}`} class="text-brand-600 hover:underline">
+                {isSurgical ? 'All Surgical DRGs' : 'All Medical DRGs'}
+              </a>
+            </li>
+            <li>
+              <a href="/procedures/" class="text-brand-600 hover:underline">Outpatient Procedure Costs</a>
+            </li>
+            <li>
+              <a href="/drugs/" class="text-brand-600 hover:underline">Prescription Drug Prices</a>
+            </li>
+            <li>
+              <a href="/conditions/" class="text-brand-600 hover:underline">Costs by Condition</a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
+          <h3 class="font-bold text-gray-900 mb-3">Understanding Hospital Charges</h3>
+          <div class="space-y-2 text-sm text-gray-600">
+            <p><strong>Charges</strong> are the hospital's list prices (chargemaster) and are often 3-5x actual costs.</p>
+            <p><strong>Costs</strong> are what it actually costs the hospital to provide care.</p>
+            <p><strong>Medicare Payment</strong> is what CMS pays the hospital under the IPPS system.</p>
+            <p><strong>Commercial rates</strong> are negotiated between hospitals and insurers, typically 1.5-2.5x Medicare.</p>
+          </div>
+        </div>
+
+        <div class="bg-yellow-50 rounded-xl p-5 border border-yellow-200">
+          <h3 class="font-bold text-yellow-800 text-sm mb-2">Disclaimer</h3>
+          <p class="text-xs text-yellow-700">
+            Costs shown are national averages from CMS data. Actual hospital costs vary significantly by location,
+            hospital type, patient severity, and insurance coverage. This is not medical or financial advice.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- FAQ Schema -->
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+</Base>

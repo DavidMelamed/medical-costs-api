@@ -1,0 +1,312 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const tools = [
+  {
+    name: 'lookup_procedure_cost',
+    description: 'Look up the cost of a medical procedure by CPT/HCPCS code or search by name. Returns Medicare facility/non-facility rates, hospital outpatient costs, and RVU data.',
+    params: [
+      { name: 'query', type: 'string', required: true, desc: 'CPT/HCPCS code or search term (e.g., "99213", "knee replacement")' },
+      { name: 'state', type: 'string', required: false, desc: 'Two-letter state code for geographic pricing' },
+    ],
+    example: 'How much does a knee MRI cost in California?',
+  },
+  {
+    name: 'get_condition_treatment_cost',
+    description: 'Get treatment costs for a medical condition or injury with cost ranges by severity (mild/moderate/severe) and associated procedures.',
+    params: [
+      { name: 'condition', type: 'string', required: true, desc: 'Condition name (e.g., "whiplash", "concussion", "acl-tear")' },
+      { name: 'severity', type: 'enum', required: false, desc: '"mild", "moderate", or "severe"' },
+    ],
+    example: 'What does it cost to treat a concussion?',
+  },
+  {
+    name: 'compare_costs_by_state',
+    description: 'Compare procedure costs across different U.S. states with Medicare and estimated commercial rates.',
+    params: [
+      { name: 'procedure_code', type: 'string', required: true, desc: 'CPT or HCPCS code (e.g., "27447")' },
+      { name: 'states', type: 'string[]', required: true, desc: 'Array of state codes (e.g., ["CA", "NY", "TX"])' },
+    ],
+    example: 'Compare knee replacement costs between California, New York, and Texas',
+  },
+  {
+    name: 'estimate_crash_injury_costs',
+    description: 'Estimate medical costs from a car crash by severity. Returns weighted cost estimates, likely injuries, and NHTSA statistics.',
+    params: [
+      { name: 'severity', type: 'enum', required: true, desc: '"minor", "moderate", "serious", "severe", or "critical"' },
+      { name: 'state', type: 'string', required: false, desc: 'Two-letter state code (default: CO)' },
+    ],
+    example: 'How much does a serious car crash cost in medical bills?',
+  },
+  {
+    name: 'search_drug_price',
+    description: 'Look up prescription drug or injectable pricing from Medicare/CMS data.',
+    params: [
+      { name: 'drug_name', type: 'string', required: true, desc: 'Drug name or HCPCS J-code (e.g., "adalimumab", "J0129")' },
+    ],
+    example: 'What does a Botox injection cost under Medicare?',
+  },
+  {
+    name: 'get_medical_cost_statistics',
+    description: 'Get a database overview: total procedures, injury categories, geographic coverage, and data sources.',
+    params: [],
+    example: 'What medical cost data is available?',
+  },
+];
+
+const claudeDesktopConfig = JSON.stringify({
+  mcpServers: {
+    "medical-costs": {
+      command: "node",
+      args: ["/path/to/medical-costs-api/mcp-server/dist/index.js"]
+    }
+  }
+}, null, 2);
+
+const claudeCodeConfig = `claude mcp add medical-costs node /path/to/medical-costs-api/mcp-server/dist/index.js`;
+---
+
+<Base
+  title="MCP Server for Medical Costs -- AI-Powered Cost Lookup | MedicalCosts.info"
+  description="Connect AI assistants like Claude to 21,000+ medical procedure costs, drug prices, and injury treatment estimates via the Model Context Protocol (MCP)."
+  canonical="/mcp/"
+>
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 text-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">MCP Server</span>
+      </div>
+      <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6">
+        Medical Cost Data for AI Assistants
+      </h1>
+      <p class="text-xl text-blue-100 mb-6">
+        Give Claude, ChatGPT, and other AI assistants direct access to <strong>21,000+ medical procedure costs</strong>,
+        drug prices, and injury treatment estimates using the <a href="https://modelcontextprotocol.io" class="underline hover:text-white">Model Context Protocol</a>.
+      </p>
+      <div class="flex flex-wrap gap-4">
+        <a href="#install" class="px-6 py-3 bg-white text-brand-700 font-bold rounded-lg hover:bg-blue-50 transition-colors">
+          Get Started
+        </a>
+        <a href="https://github.com/david-568/medical-costs-api/tree/main/mcp-server" class="px-6 py-3 border-2 border-white/40 text-white font-bold rounded-lg hover:bg-white/10 transition-colors">
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- What is MCP -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <h2 class="text-3xl font-bold text-gray-900 mb-4">What is MCP?</h2>
+    <p class="text-lg text-gray-600 mb-6">
+      The <strong>Model Context Protocol (MCP)</strong> is an open standard that lets AI assistants connect to external
+      data sources and tools. Instead of pasting data into a chat, the AI can directly query our medical costs database
+      to answer your questions with real, cited data.
+    </p>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="bg-gray-50 rounded-xl p-6">
+        <div class="text-3xl mb-3">
+          <svg class="w-8 h-8 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <h3 class="font-bold text-gray-900 mb-2">Real-Time Lookups</h3>
+        <p class="text-sm text-gray-600">Ask Claude "How much does a knee MRI cost?" and get actual Medicare rates, not hallucinated numbers.</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-6">
+        <div class="text-3xl mb-3">
+          <svg class="w-8 h-8 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        </div>
+        <h3 class="font-bold text-gray-900 mb-2">State Comparisons</h3>
+        <p class="text-sm text-gray-600">Compare costs across states and see how geographic factors affect pricing.</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-6">
+        <div class="text-3xl mb-3">
+          <svg class="w-8 h-8 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+        </div>
+        <h3 class="font-bold text-gray-900 mb-2">Government Data</h3>
+        <p class="text-sm text-gray-600">All costs from CMS Medicare fee schedules, CDC, and NHTSA -- not estimates or guesses.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Installation -->
+  <section id="install" class="bg-gray-50 py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-gray-900 mb-8">Installation</h2>
+
+      <!-- Step 1 -->
+      <div class="mb-10">
+        <h3 class="text-xl font-bold text-gray-900 mb-3">1. Clone and build</h3>
+        <div class="bg-gray-900 rounded-xl p-5 text-sm font-mono text-gray-100 overflow-x-auto">
+          <pre><code>git clone https://github.com/david-568/medical-costs-api.git
+cd medical-costs-api/mcp-server
+npm install
+npm run build</code></pre>
+        </div>
+      </div>
+
+      <!-- Step 2: Claude Desktop -->
+      <div class="mb-10">
+        <h3 class="text-xl font-bold text-gray-900 mb-3">2. Configure Claude Desktop</h3>
+        <p class="text-gray-600 mb-3">
+          Add this to your Claude Desktop config file
+          (<code class="text-sm bg-gray-200 px-2 py-0.5 rounded">~/Library/Application Support/Claude/claude_desktop_config.json</code> on macOS,
+          <code class="text-sm bg-gray-200 px-2 py-0.5 rounded">%APPDATA%\Claude\claude_desktop_config.json</code> on Windows):
+        </p>
+        <div class="relative">
+          <div class="bg-gray-900 rounded-xl p-5 text-sm font-mono text-gray-100 overflow-x-auto">
+            <pre id="claude-config"><code>{claudeDesktopConfig}</code></pre>
+          </div>
+          <button
+            id="copy-config-btn"
+            class="absolute top-3 right-3 px-3 py-1.5 bg-brand-600 text-white text-xs font-bold rounded-lg hover:bg-brand-700 transition-colors"
+          >
+            Copy
+          </button>
+        </div>
+        <p class="text-sm text-gray-500 mt-2">Update the path to match where you cloned the repo.</p>
+      </div>
+
+      <!-- Step 2b: Claude Code -->
+      <div class="mb-10">
+        <h3 class="text-xl font-bold text-gray-900 mb-3">Or: Configure Claude Code (CLI)</h3>
+        <div class="relative">
+          <div class="bg-gray-900 rounded-xl p-5 text-sm font-mono text-gray-100 overflow-x-auto">
+            <pre id="claude-code-config"><code>{claudeCodeConfig}</code></pre>
+          </div>
+          <button
+            id="copy-code-btn"
+            class="absolute top-3 right-3 px-3 py-1.5 bg-brand-600 text-white text-xs font-bold rounded-lg hover:bg-brand-700 transition-colors"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div>
+        <h3 class="text-xl font-bold text-gray-900 mb-3">3. Start using it</h3>
+        <p class="text-gray-600">
+          Restart Claude Desktop. You should see the medical-costs tools in the tool list.
+          Try asking: <em>"How much does a knee MRI cost in California?"</em>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <h2 class="text-3xl font-bold text-gray-900 mb-8">Available Tools</h2>
+
+    <div class="space-y-6">
+      {tools.map(tool => (
+        <div class="bg-white border border-gray-200 rounded-xl p-6 hover:border-brand-300 transition-colors">
+          <div class="flex items-start justify-between mb-3">
+            <h3 class="text-lg font-bold text-gray-900 font-mono">{tool.name}</h3>
+          </div>
+          <p class="text-gray-600 mb-4">{tool.description}</p>
+
+          {tool.params.length > 0 && (
+            <div class="mb-4">
+              <h4 class="text-sm font-bold text-gray-700 mb-2">Parameters</h4>
+              <div class="space-y-1">
+                {tool.params.map(p => (
+                  <div class="flex items-start gap-2 text-sm">
+                    <code class="bg-gray-100 px-2 py-0.5 rounded text-brand-700 font-mono whitespace-nowrap">{p.name}</code>
+                    <span class="text-gray-400">({p.type}{p.required ? '' : ', optional'})</span>
+                    <span class="text-gray-600">-- {p.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div class="bg-blue-50 rounded-lg px-4 py-3">
+            <span class="text-xs font-bold text-blue-700 uppercase tracking-wide">Example prompt</span>
+            <p class="text-blue-900 mt-1 italic">"{tool.example}"</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- HTTP Mode -->
+  <section class="bg-gray-50 py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-gray-900 mb-4">HTTP/SSE Mode</h2>
+      <p class="text-gray-600 mb-6">
+        For web-based MCP clients, you can run the server in HTTP mode with Server-Sent Events:
+      </p>
+      <div class="bg-gray-900 rounded-xl p-5 text-sm font-mono text-gray-100 overflow-x-auto mb-4">
+        <pre><code>npm run start:http
+# Server runs on http://localhost:3100
+# SSE endpoint: http://localhost:3100/sse
+# Messages endpoint: http://localhost:3100/messages</code></pre>
+      </div>
+      <p class="text-sm text-gray-500">Set the <code class="bg-gray-200 px-1.5 py-0.5 rounded">PORT</code> environment variable to change the default port.</p>
+    </div>
+  </section>
+
+  <!-- Data Sources -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <h2 class="text-3xl font-bold text-gray-900 mb-6">Data Sources</h2>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white border rounded-lg p-5">
+        <h3 class="font-bold text-gray-900 mb-1">CMS Medicare Fee Schedule</h3>
+        <p class="text-sm text-gray-600">21,000+ procedure costs from the CY 2026 Physician Fee Schedule with national and geographic rates.</p>
+      </div>
+      <div class="bg-white border rounded-lg p-5">
+        <h3 class="font-bold text-gray-900 mb-1">CMS Hospital Outpatient</h3>
+        <p class="text-sm text-gray-600">Hospital outpatient department rates for facility-based procedures.</p>
+      </div>
+      <div class="bg-white border rounded-lg p-5">
+        <h3 class="font-bold text-gray-900 mb-1">CDC WISQARS</h3>
+        <p class="text-sm text-gray-600">Cost of injury data including lifetime costs for severe injuries and trauma.</p>
+      </div>
+      <div class="bg-white border rounded-lg p-5">
+        <h3 class="font-bold text-gray-900 mb-1">NHTSA Crash Cost Studies</h3>
+        <p class="text-sm text-gray-600">Economic impact of motor vehicle crashes with severity-based cost estimates.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="bg-brand-700 text-white py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-2xl font-bold mb-4">No API key required</h2>
+      <p class="text-blue-100 mb-6">All medical cost data is free and sourced from public U.S. government datasets.</p>
+      <a href="/procedures/" class="inline-block px-6 py-3 bg-white text-brand-700 font-bold rounded-lg hover:bg-blue-50 transition-colors">
+        Browse Procedures on the Web
+      </a>
+    </div>
+  </section>
+
+  <script>
+    function copyToClipboard(elementId: string, btnId: string) {
+      const btn = document.getElementById(btnId);
+      const el = document.getElementById(elementId);
+      if (!btn || !el) return;
+
+      btn.addEventListener('click', async () => {
+        const text = el.textContent || '';
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        } catch {
+          // Fallback
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        }
+      });
+    }
+
+    copyToClipboard('claude-config', 'copy-config-btn');
+    copyToClipboard('claude-code-config', 'copy-code-btn');
+  </script>
+</Base>
