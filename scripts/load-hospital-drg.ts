@@ -1,6 +1,5 @@
 /**
- * Load CMS Inpatient by Provider data (hospital_drg_costs) into D1 via wrangler.
- *
+ * Load CMS Inpatient by Provider data into D1.
  * Usage: npx tsx scripts/load-hospital-drg.ts
  */
 
@@ -44,32 +43,26 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
-function escapeSQL(val: string): string {
-  return val.replace(/'/g, "''");
-}
-
-function makeId(ccn: string, drg: string): string {
-  const hash = createHash('md5').update(`${ccn}-${drg}`).digest('hex');
-  return hash.substring(0, 32);
+function esc(val: string): string {
+  return val.replace(/'/g, "''").replace(/\\/g, '\\\\');
 }
 
 async function main() {
-  console.log('Reading CSV...');
+  console.log('Reading CSV (latin-1)...');
   const raw = readFileSync(CSV_PATH, 'latin1');
   const lines = raw.split('\n').filter(l => l.trim().length > 0);
 
-  // Parse header
   const header = parseCSVLine(lines[0]);
-  console.log('Header columns:', header.join(', '));
+  console.log('Columns:', header.length);
 
-  // Find column indices
+  // Map columns
   const colMap: Record<string, number> = {};
   header.forEach((h, i) => colMap[h.trim()] = i);
 
   const ccnIdx = colMap['Rndrng_Prvdr_CCN'];
   const nameIdx = colMap['Rndrng_Prvdr_Org_Name'];
   const cityIdx = colMap['Rndrng_Prvdr_City'];
-  const stateIdx = colMap['Rndrng_Prvdr_St'];
+  const stateAbrvIdx = colMap['Rndrng_Prvdr_State_Abrvtn'];
   const zipIdx = colMap['Rndrng_Prvdr_Zip5'];
   const drgCdIdx = colMap['DRG_Cd'];
   const drgDescIdx = colMap['DRG_Desc'];
@@ -78,49 +71,57 @@ async function main() {
   const paymentsIdx = colMap['Avg_Tot_Pymt_Amt'];
   const medicareIdx = colMap['Avg_Mdcr_Pymt_Amt'];
 
-  // Note: Rndrng_Prvdr_St in this file appears to be the city field based on our inspection
-  // The actual state abbreviation is in Rndrng_Prvdr_State_Abrvtn
-  const stateAbrvIdx = colMap['Rndrng_Prvdr_State_Abrvtn'];
-
-  console.log(`Parsing ${lines.length - 1} data rows...`);
+  // First clear any existing data
+  console.log('Clearing existing data...');
+  const clearSql = 'DELETE FROM hospital_drg_costs;';
+  writeFileSync('/tmp/hdc_clear.sql', clearSql);
+  try {
+    execSync(`cd /mnt/c/repos/medical-costs-api && npx wrangler d1 execute ${DB_NAME} --remote --file=/tmp/hdc_clear.sql`, {
+      stdio: 'pipe', timeout: 30000,
+    });
+  } catch (e) {
+    console.log('Clear may have failed, continuing...');
+  }
 
   const dataRows = lines.slice(1);
-  let batchNum = 0;
+  console.log(`Processing ${dataRows.length} rows in batches of ${BATCH_SIZE}...`);
+
   let totalLoaded = 0;
+  let batchNum = 0;
+  let errors = 0;
 
   for (let i = 0; i < dataRows.length; i += BATCH_SIZE) {
     const batch = dataRows.slice(i, i + BATCH_SIZE);
     const values: string[] = [];
 
-    for (const line of batch) {
-      const fields = parseCSVLine(line);
+    for (let j = 0; j < batch.length; j++) {
+      const fields = parseCSVLine(batch[j]);
       if (fields.length < 11) continue;
 
-      const ccn = fields[ccnIdx] || '';
-      const name = escapeSQL(fields[nameIdx] || '');
-      const city = escapeSQL(fields[cityIdx] || '');
-      // Use abbreviation column for state, fall back to stateIdx
-      const state = (stateAbrvIdx !== undefined ? fields[stateAbrvIdx] : fields[stateIdx]) || '';
-      const zip = fields[zipIdx] || '';
-      const drgCd = fields[drgCdIdx] || '';
-      const drgDesc = escapeSQL(fields[drgDescIdx] || '');
+      const ccn = esc(fields[ccnIdx] || '');
+      const name = esc(fields[nameIdx] || '');
+      const city = esc(fields[cityIdx] || '');
+      const state = esc(fields[stateAbrvIdx] || '');
+      const zip = esc(fields[zipIdx] || '');
+      const drgCd = esc(fields[drgCdIdx] || '');
+      const drgDesc = esc(fields[drgDescIdx] || '');
       const discharges = parseInt(fields[dischIdx]) || 0;
       const charges = parseFloat(fields[chargesIdx]) || 0;
       const payments = parseFloat(fields[paymentsIdx]) || 0;
       const medicare = parseFloat(fields[medicareIdx]) || 0;
 
-      const id = makeId(ccn, drgCd);
+      // Use unique combination of index position as ID
+      const rowId = `hdc_${i + j}`;
 
       values.push(
-        `('${id}-${i + values.length}','${escapeSQL(ccn)}','${name}','${city}','${escapeSQL(state)}','${zip}','${escapeSQL(drgCd)}','${drgDesc}',${discharges},${charges},${payments},${medicare},2023)`
+        `('${rowId}','${ccn}','${name}','${city}','${state}','${zip}','${drgCd}','${drgDesc}',${discharges},${charges},${payments},${medicare},2023)`
       );
     }
 
     if (values.length === 0) continue;
 
-    const sql = `INSERT OR IGNORE INTO hospital_drg_costs (id,provider_ccn,provider_name,provider_city,provider_state,provider_zip,drg_code,drg_description,total_discharges,avg_covered_charges,avg_total_payments,avg_medicare_payments,year) VALUES ${values.join(',')};`;
+    const sql = `INSERT OR REPLACE INTO hospital_drg_costs (id,provider_ccn,provider_name,provider_city,provider_state,provider_zip,drg_code,drg_description,total_discharges,avg_covered_charges,avg_total_payments,avg_medicare_payments,year) VALUES\n${values.join(',\n')};`;
 
-    // Write SQL to temp file to avoid command line length limits
     const tmpFile = `/tmp/hdc_batch_${batchNum}.sql`;
     writeFileSync(tmpFile, sql);
 
@@ -130,18 +131,19 @@ async function main() {
         timeout: 60000,
       });
       totalLoaded += values.length;
-      batchNum++;
-      if (batchNum % 10 === 0) {
-        console.log(`  Batch ${batchNum}: ${totalLoaded} rows loaded so far...`);
-      }
     } catch (err: any) {
-      console.error(`  Error on batch ${batchNum}:`, err.stderr?.toString().slice(0, 200));
-      // Try to continue
-      batchNum++;
+      errors++;
+      const errMsg = err.stderr?.toString().slice(0, 300) || err.message?.slice(0, 300);
+      console.error(`  Batch ${batchNum} FAILED (rows ${i}-${i + BATCH_SIZE}): ${errMsg}`);
+    }
+
+    batchNum++;
+    if (batchNum % 20 === 0) {
+      console.log(`  Batch ${batchNum}/${Math.ceil(dataRows.length / BATCH_SIZE)}: ${totalLoaded} rows loaded (${errors} errors)`);
     }
   }
 
-  console.log(`Done! Loaded ${totalLoaded} rows in ${batchNum} batches.`);
+  console.log(`\nDone! Loaded ${totalLoaded}/${dataRows.length} rows in ${batchNum} batches (${errors} errors).`);
 }
 
 main().catch(console.error);
