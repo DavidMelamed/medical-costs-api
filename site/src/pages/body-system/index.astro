@@ -1,0 +1,111 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getBodySystems, formatCurrency, formatCurrencyFull } from '@/lib/api';
+
+const bodySystems = await getBodySystems();
+
+const bodySystemMeta: Record<string, { icon: string; description: string; slug: string }> = {
+  'Musculoskeletal': { icon: '🦴', description: 'Bones, joints, muscles, tendons, and ligaments — including orthopedic procedures, fracture care, and joint replacements.', slug: 'musculoskeletal' },
+  'Cardiovascular': { icon: '❤️', description: 'Heart and blood vessel procedures — cardiac catheterization, stents, valve repair, and vascular surgery.', slug: 'cardiovascular' },
+  'Nervous': { icon: '🧠', description: 'Brain, spinal cord, and nerve procedures — neurosurgery, nerve blocks, EMG studies, and brain imaging.', slug: 'nervous' },
+  'Digestive': { icon: '🫁', description: 'Stomach, intestines, liver, and GI tract — endoscopy, colonoscopy, hernia repair, and abdominal surgery.', slug: 'digestive' },
+  'Respiratory': { icon: '🫁', description: 'Lungs and airways — bronchoscopy, chest procedures, pulmonary function testing, and airway management.', slug: 'respiratory' },
+  'Integumentary': { icon: '🩹', description: 'Skin, nails, and wound care — laceration repair, skin biopsy, burn treatment, and dermatologic procedures.', slug: 'integumentary' },
+  'Eye': { icon: '👁️', description: 'Eye and orbital procedures — cataract surgery, retinal procedures, glaucoma treatment, and vision correction.', slug: 'eye' },
+  'Urinary': { icon: '🏥', description: 'Kidneys, bladder, and urinary tract — cystoscopy, kidney stone treatment, and urologic procedures.', slug: 'urinary' },
+  'Reproductive': { icon: '🏥', description: 'Male and female reproductive system — hysterectomy, prostate procedures, and fertility treatments.', slug: 'reproductive' },
+  'Endocrine': { icon: '🏥', description: 'Thyroid, adrenal, and other glands — thyroid surgery, parathyroid procedures, and hormone-related treatments.', slug: 'endocrine' },
+  'Auditory': { icon: '👂', description: 'Ear and hearing — ear tube placement, cochlear implants, and hearing-related procedures.', slug: 'auditory' },
+  'Hemic/Lymphatic': { icon: '🩸', description: 'Blood, bone marrow, spleen, and lymph nodes — bone marrow biopsy, splenectomy, and lymph node procedures.', slug: 'hemic-lymphatic' },
+  'General': { icon: '🏥', description: 'Office visits, E&M services, imaging, and multi-system procedures that span body systems.', slug: 'general' },
+};
+
+const title = 'Medical Costs by Body System — Procedures, Conditions & Treatments | MedicalCosts.info';
+const description = 'Browse medical procedure costs organized by body system. Compare costs for musculoskeletal, cardiovascular, nervous system, and more. Medicare rates and commercial insurance estimates.';
+
+const totalProcs = bodySystems.reduce((sum, bs) => sum + bs.procedureCount, 0);
+---
+
+<Base title={title} description={description} canonical="/body-system/">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Body Systems</span>
+    </nav>
+
+    <div class="mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+        Medical Costs by Body System
+      </h1>
+      <p class="text-lg text-gray-600 max-w-3xl">
+        Browse {totalProcs.toLocaleString()} medical procedures organized by body system.
+        Each hub includes procedure costs, related conditions, common medications, and treatment alternatives.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {bodySystems.map(bs => {
+        const meta = bodySystemMeta[bs.bodySystem] || { icon: '🏥', description: '', slug: bs.bodySystem.toLowerCase().replace(/[^a-z0-9]+/g, '-') };
+        return (
+          <a href={`/body-system/${meta.slug}/`} class="group bg-white rounded-xl border border-gray-200 hover:border-brand-300 hover:shadow-lg transition-all p-6">
+            <div class="flex items-start gap-4">
+              <div class="text-3xl flex-shrink-0">{meta.icon}</div>
+              <div class="flex-1 min-w-0">
+                <h2 class="text-lg font-bold text-gray-900 group-hover:text-brand-700 transition-colors">
+                  {bs.bodySystem}
+                </h2>
+                <p class="text-sm text-gray-500 mt-1 line-clamp-2">{meta.description}</p>
+                <div class="flex items-center gap-4 mt-3 text-sm">
+                  <span class="text-gray-600">
+                    <span class="font-semibold text-gray-900">{bs.procedureCount}</span> procedures
+                  </span>
+                  <span class="text-gray-600">
+                    Avg <span class="font-semibold text-brand-700">{formatCurrency(bs.avgCost)}</span>
+                  </span>
+                </div>
+                <div class="text-xs text-gray-400 mt-1">
+                  Range: {formatCurrency(bs.minCost)} — {formatCurrency(bs.maxCost)}
+                </div>
+              </div>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+
+    <div class="mt-12 bg-brand-50 rounded-xl border border-brand-200 p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-3">Understanding Body Systems & Medical Costs</h2>
+      <div class="prose prose-sm text-gray-600 max-w-none">
+        <p>
+          Medical procedures are classified by the body system they primarily affect. This classification helps patients
+          understand which specialists they may need and compare costs across different treatment approaches.
+        </p>
+        <p class="mt-3">
+          Costs shown are based on the CMS Medicare Physician Fee Schedule (CY 2026) and represent the national
+          average Medicare reimbursement rate. Commercial insurance typically pays 150-250% of Medicare rates.
+          Your actual cost depends on your insurance plan, deductible, and location.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <a href="/procedures/" class="bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors">
+        <h3 class="font-semibold text-gray-900">All Procedures</h3>
+        <p class="text-sm text-gray-500 mt-1">Search all CPT codes</p>
+      </a>
+      <a href="/conditions/" class="bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors">
+        <h3 class="font-semibold text-gray-900">Conditions</h3>
+        <p class="text-sm text-gray-500 mt-1">Cost by diagnosis</p>
+      </a>
+      <a href="/drugs/" class="bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors">
+        <h3 class="font-semibold text-gray-900">Drug Prices</h3>
+        <p class="text-sm text-gray-500 mt-1">NADAC medication costs</p>
+      </a>
+      <a href="/drg/" class="bg-white rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors">
+        <h3 class="font-semibold text-gray-900">Hospital Stays</h3>
+        <p class="text-sm text-gray-500 mt-1">DRG-based costs</p>
+      </a>
+    </div>
+  </div>
+</Base>

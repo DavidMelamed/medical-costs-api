@@ -314,6 +314,34 @@ export async function getGraphRelationships(entityType: string, entityId: string
   return fetchApi<GraphResult>(`/graph/${entityType}/${entityId}`);
 }
 
+// Body Systems
+export interface BodySystemSummary {
+  bodySystem: string;
+  procedureCount: number;
+  avgCost: number;
+  maxCost: number;
+  minCost: number;
+}
+
+export async function getBodySystems(): Promise<BodySystemSummary[]> {
+  const data = await fetchApi<BodySystemSummary[]>('/body-systems');
+  return data || [];
+}
+
+export async function getBodySystemDetail(slug: string) {
+  return fetchApi<any>(`/body-systems/${slug}`);
+}
+
+// Alternatives
+export async function getAlternatives(code: string) {
+  return fetchApi<any>(`/alternatives/${code}`);
+}
+
+// Medications for condition
+export async function getMedications(conditionSlug: string) {
+  return fetchApi<any>(`/medications/${conditionSlug}`);
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },

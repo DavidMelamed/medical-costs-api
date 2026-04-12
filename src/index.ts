@@ -86,6 +86,19 @@ export default {
       if (path === "/api/metrics") return handleMetrics(env, cors);
       if (path === "/api/metrics/facts") return handleMetricsFacts(env, cors);
       if (path === "/api/search") return handleUnifiedSearch(url, env, cors);
+      if (path === "/api/body-systems") return handleBodySystems(env, cors);
+
+      // Body system detail
+      const bodySystemMatch = path.match(/^\/api\/body-systems\/([^/]+)$/);
+      if (bodySystemMatch) return handleBodySystemDetail(decodeURIComponent(bodySystemMatch[1]), url, env, cors);
+
+      // Alternatives for a procedure
+      const alternativesMatch = path.match(/^\/api\/alternatives\/([^/]+)$/);
+      if (alternativesMatch) return handleAlternatives(decodeURIComponent(alternativesMatch[1]), env, cors);
+
+      // Medications for a condition
+      const medicationsMatch = path.match(/^\/api\/medications\/([^/]+)$/);
+      if (medicationsMatch) return handleMedications(decodeURIComponent(medicationsMatch[1]), env, cors);
 
       // Parameterized routes
       const graphMatch = path.match(/^\/api\/graph\/([^/]+)\/(.+)$/);
@@ -1502,4 +1515,214 @@ async function handleSeed(request: Request, env: Env, cors: Record<string, strin
   await env.DB.prepare("PRAGMA foreign_keys = ON").run();
 
   return success({ message: "Seed complete", inserted }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/body-systems — list all body systems with aggregate stats
+// ---------------------------------------------------------------------------
+
+async function handleBodySystems(env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results } = await env.DB.prepare(`
+    SELECT
+      body_system AS bodySystem,
+      COUNT(*) AS procedureCount,
+      ROUND(AVG(national_facility_rate), 2) AS avgCost,
+      MAX(national_facility_rate) AS maxCost,
+      MIN(national_facility_rate) AS minCost
+    FROM medical_procedures
+    WHERE body_system IS NOT NULL AND national_facility_rate IS NOT NULL
+    GROUP BY body_system
+    ORDER BY body_system
+  `).all();
+
+  return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/body-systems/:slug — body system detail with procedures, conditions, drugs
+// ---------------------------------------------------------------------------
+
+async function handleBodySystemDetail(slug: string, url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  // Convert slug to body_system name (e.g., "musculoskeletal" -> "Musculoskeletal")
+  const bodySystemName = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('/');
+  // Also try simpler title case
+  const simpleTitle = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 500);
+  const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+
+  // Get procedures for this body system
+  const { results: procedures } = await env.DB.prepare(`
+    SELECT
+      p.id, p.code, p.code_type AS codeType, p.description, p.category,
+      p.body_system AS bodySystem, p.national_facility_rate AS nationalFacilityRate,
+      p.national_non_fac_rate AS nationalNonFacRate,
+      p.hospital_outpatient_cost AS hospitalOutpatientCost,
+      p.asc_cost AS ascCost,
+      ps.slug
+    FROM medical_procedures p
+    LEFT JOIN procedure_slugs ps ON ps.code = p.code
+    WHERE (p.body_system = ?1 OR p.body_system = ?2)
+      AND p.category NOT LIKE 'Prescription Drug%'
+    ORDER BY p.national_facility_rate DESC
+    LIMIT ?3 OFFSET ?4
+  `).bind(bodySystemName, simpleTitle, limit, offset).all();
+
+  // Count total
+  const { results: countResult } = await env.DB.prepare(`
+    SELECT COUNT(*) AS total FROM medical_procedures
+    WHERE (body_system = ?1 OR body_system = ?2)
+      AND category NOT LIKE 'Prescription Drug%'
+  `).bind(bodySystemName, simpleTitle).all();
+  const total = (countResult[0] as any)?.total || 0;
+
+  // Get conditions linked via injury_categories body_region
+  const { results: conditions } = await env.DB.prepare(`
+    SELECT id, name, slug, description, body_region AS bodyRegion,
+           mild_cost_low AS mildCostLow, mild_cost_high AS mildCostHigh,
+           moderate_cost_low AS moderateCostLow, moderate_cost_high AS moderateCostHigh,
+           severe_cost_low AS severeCostLow, severe_cost_high AS severeCostHigh
+    FROM injury_categories
+    WHERE body_region LIKE '%' || ?1 || '%' OR body_region LIKE '%' || ?2 || '%'
+    ORDER BY name
+  `).bind(bodySystemName, simpleTitle).all();
+
+  // Get related drugs (via treats_with_drug relationships to these conditions)
+  const conditionSlugs = (conditions as any[]).map((c: any) => c.slug);
+  let drugs: unknown[] = [];
+  if (conditionSlugs.length > 0) {
+    const placeholders = conditionSlugs.map((_, i) => `?${i + 1}`).join(',');
+    const { results: drugResults } = await env.DB.prepare(`
+      SELECT DISTINCT
+        er.source_id AS drugCode,
+        mp.description AS drugName,
+        mp.national_facility_rate AS nadacPerUnit,
+        mp.category AS drugCategory,
+        er.target_id AS conditionSlug,
+        er.weight
+      FROM entity_relationships er
+      JOIN medical_procedures mp ON mp.code = er.source_id
+      WHERE er.relationship = 'treats_with_drug'
+        AND er.target_id IN (${placeholders})
+      ORDER BY er.weight DESC
+      LIMIT 50
+    `).bind(...conditionSlugs).all();
+    drugs = drugResults;
+  }
+
+  // Aggregate stats
+  const stats = {
+    totalProcedures: total,
+    totalConditions: conditions.length,
+    totalDrugs: drugs.length,
+    avgCost: procedures.length > 0 ? Math.round((procedures as any[]).reduce((sum: number, p: any) => sum + (p.nationalFacilityRate || 0), 0) / procedures.length) : 0,
+    maxCostProcedure: procedures.length > 0 ? procedures[0] : null,
+  };
+
+  return success({
+    bodySystem: bodySystemName === simpleTitle ? simpleTitle : bodySystemName,
+    slug,
+    procedures,
+    conditions,
+    drugs,
+    stats,
+    pagination: { total, limit, offset },
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/alternatives/:code — cheaper alternatives for a procedure
+// ---------------------------------------------------------------------------
+
+async function handleAlternatives(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  // Find alternatives where this procedure is the target (something is an alternative TO this)
+  const { results: cheaperAlts } = await env.DB.prepare(`
+    SELECT
+      er.source_id AS altCode,
+      er.weight,
+      mp.description AS altDescription,
+      mp.national_facility_rate AS altRate,
+      mp.body_system AS altBodySystem,
+      mp.category AS altCategory,
+      ps.slug AS altSlug
+    FROM entity_relationships er
+    JOIN medical_procedures mp ON mp.code = er.source_id
+    LEFT JOIN procedure_slugs ps ON ps.code = er.source_id
+    WHERE er.relationship = 'alternative_to'
+      AND er.target_id = ?1
+      AND er.source_type = 'procedure'
+    ORDER BY er.weight DESC
+  `).bind(code).all();
+
+  // Also find what this procedure is an alternative to (more expensive options)
+  const { results: moreExpensive } = await env.DB.prepare(`
+    SELECT
+      er.target_id AS altCode,
+      er.weight,
+      mp.description AS altDescription,
+      mp.national_facility_rate AS altRate,
+      mp.body_system AS altBodySystem,
+      mp.category AS altCategory,
+      ps.slug AS altSlug
+    FROM entity_relationships er
+    JOIN medical_procedures mp ON mp.code = er.target_id
+    LEFT JOIN procedure_slugs ps ON ps.code = er.target_id
+    WHERE er.relationship = 'alternative_to'
+      AND er.source_id = ?1
+      AND er.source_type = 'procedure'
+    ORDER BY er.weight DESC
+  `).bind(code).all();
+
+  // Get the current procedure's rate for comparison
+  const { results: currentProc } = await env.DB.prepare(`
+    SELECT national_facility_rate AS rate, description FROM medical_procedures WHERE code = ?1
+  `).bind(code).all();
+  const currentRate = (currentProc[0] as any)?.rate || 0;
+
+  const alternatives = [
+    ...(cheaperAlts as any[]).map((a: any) => ({
+      ...a,
+      direction: 'cheaper',
+      savingsPercent: currentRate > 0 && a.altRate ? Math.round((1 - a.altRate / currentRate) * 100) : null,
+    })),
+    ...(moreExpensive as any[]).map((a: any) => ({
+      ...a,
+      direction: 'alternative_target',
+      costDiffPercent: a.altRate && currentRate > 0 ? Math.round((a.altRate / currentRate - 1) * 100) : null,
+    })),
+  ];
+
+  return success({
+    code,
+    currentRate,
+    currentDescription: (currentProc[0] as any)?.description,
+    alternatives,
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/medications/:conditionSlug — drugs that treat a condition
+// ---------------------------------------------------------------------------
+
+async function handleMedications(conditionSlug: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results: medications } = await env.DB.prepare(`
+    SELECT
+      er.source_id AS drugCode,
+      mp.description AS drugName,
+      mp.national_facility_rate AS nadacPerUnit,
+      mp.national_non_fac_rate AS nationalNonFacRate,
+      mp.category AS drugCategory,
+      er.weight
+    FROM entity_relationships er
+    JOIN medical_procedures mp ON mp.code = er.source_id
+    WHERE er.relationship = 'treats_with_drug'
+      AND er.target_id = ?1
+    ORDER BY er.weight DESC, mp.description
+  `).bind(conditionSlug).all();
+
+  return success({
+    conditionSlug,
+    medications,
+    total: medications.length,
+  }, cors);
 }

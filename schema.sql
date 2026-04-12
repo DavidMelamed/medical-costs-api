@@ -205,3 +205,52 @@ CREATE TABLE IF NOT EXISTS consumer_descriptions (
   common_reasons TEXT,
   preparation_tips TEXT
 );
+
+-- ============================================================================
+-- Injury Work Loss (BLS SOII — Days Away From Work by Injury Type)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS injury_work_loss (
+  id TEXT PRIMARY KEY,
+  injury_type TEXT,
+  body_part TEXT,
+  median_days_away INTEGER,
+  mean_days_away INTEGER,
+  cases_with_days_away INTEGER,
+  year INTEGER,
+  source TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_iwl_type ON injury_work_loss(injury_type);
+CREATE INDEX IF NOT EXISTS idx_iwl_year ON injury_work_loss(year);
+
+-- ============================================================================
+-- Cost Trends (CMS Conversion Factors, Medical CPI, YoY changes)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS cost_trends (
+  id TEXT PRIMARY KEY,
+  metric TEXT,
+  year INTEGER,
+  value REAL,
+  source TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ct_metric ON cost_trends(metric);
+CREATE INDEX IF NOT EXISTS idx_ct_year ON cost_trends(year);
+
+-- ============================================================================
+-- Hospital Negotiated Rates (from MRF price transparency files)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS hospital_negotiated_rates (
+  id TEXT PRIMARY KEY,
+  hospital_name TEXT,
+  hospital_state TEXT,
+  code TEXT,
+  code_type TEXT,
+  description TEXT,
+  payer_name TEXT,
+  plan_name TEXT,
+  negotiated_rate REAL,
+  methodology TEXT,
+  setting TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_hnr_code ON hospital_negotiated_rates(code);
+CREATE INDEX IF NOT EXISTS idx_hnr_payer ON hospital_negotiated_rates(payer_name);
+CREATE INDEX IF NOT EXISTS idx_hnr_state ON hospital_negotiated_rates(hospital_state);
