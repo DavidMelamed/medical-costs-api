@@ -40,12 +40,43 @@ const description = 'Compare medical procedure costs across states. See how Medi
     <div id="compare-results"></div>
 
     <div class="mt-8 bg-gray-50 rounded-xl p-6">
-      <h2 class="font-bold text-gray-900 mb-3">Popular Comparisons</h2>
+      <h2 class="font-bold text-gray-900 mb-3">Popular State Comparisons</h2>
       <div class="grid sm:grid-cols-2 gap-2">
         <button onclick="runCompare('99285', 'CO,CA,NY,TX,FL')" class="text-left text-sm text-brand-600 hover:underline">ER Visit (99285) — CO vs CA vs NY vs TX vs FL</button>
         <button onclick="runCompare('72148', 'CO,CA,NY,TX,FL')" class="text-left text-sm text-brand-600 hover:underline">MRI Lumbar (72148) — 5-State Comparison</button>
         <button onclick="runCompare('27427', 'CA,NY,TX,FL,IL')" class="text-left text-sm text-brand-600 hover:underline">ACL Surgery (27427) — Major States</button>
         <button onclick="runCompare('97110', 'CO,CA,NY,TX,FL')" class="text-left text-sm text-brand-600 hover:underline">Physical Therapy (97110) — 5-State Comparison</button>
+      </div>
+    </div>
+
+    <div class="mt-8 bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="font-bold text-gray-900 mb-3">Procedure vs Procedure Comparisons</h2>
+      <p class="text-sm text-gray-500 mb-4">Compare two specific procedures side by side</p>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <a href="/compare/99285-vs-99283/" class="block px-4 py-3 bg-gray-50 rounded-lg hover:bg-brand-50 hover:border-brand-200 border border-gray-100 transition-colors">
+          <div class="font-medium text-gray-900">ER Visit: High vs Moderate</div>
+          <div class="text-xs text-gray-500">CPT 99285 vs 99283</div>
+        </a>
+        <a href="/compare/72148-vs-72141/" class="block px-4 py-3 bg-gray-50 rounded-lg hover:bg-brand-50 hover:border-brand-200 border border-gray-100 transition-colors">
+          <div class="font-medium text-gray-900">MRI: Lumbar vs Cervical Spine</div>
+          <div class="text-xs text-gray-500">CPT 72148 vs 72141</div>
+        </a>
+        <a href="/compare/27447-vs-27130/" class="block px-4 py-3 bg-gray-50 rounded-lg hover:bg-brand-50 hover:border-brand-200 border border-gray-100 transition-colors">
+          <div class="font-medium text-gray-900">Knee vs Hip Replacement</div>
+          <div class="text-xs text-gray-500">CPT 27447 vs 27130</div>
+        </a>
+        <a href="/compare/99213-vs-99214/" class="block px-4 py-3 bg-gray-50 rounded-lg hover:bg-brand-50 hover:border-brand-200 border border-gray-100 transition-colors">
+          <div class="font-medium text-gray-900">Office Visit: Level 3 vs Level 4</div>
+          <div class="text-xs text-gray-500">CPT 99213 vs 99214</div>
+        </a>
+        <a href="/compare/45380-vs-45378/" class="block px-4 py-3 bg-gray-50 rounded-lg hover:bg-brand-50 hover:border-brand-200 border border-gray-100 transition-colors">
+          <div class="font-medium text-gray-900">Colonoscopy: Biopsy vs Diagnostic</div>
+          <div class="text-xs text-gray-500">CPT 45380 vs 45378</div>
+        </a>
+        <a href="/compare/66984-vs-66982/" class="block px-4 py-3 bg-gray-50 rounded-lg hover:bg-brand-50 hover:border-brand-200 border border-gray-100 transition-colors">
+          <div class="font-medium text-gray-900">Cataract: Standard vs Complex</div>
+          <div class="text-xs text-gray-500">CPT 66984 vs 66982</div>
+        </a>
       </div>
     </div>
   </div>

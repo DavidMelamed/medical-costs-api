@@ -1,0 +1,244 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getProcedure, formatCurrencyFull } from '@/lib/api';
+
+const { codes } = Astro.params;
+if (!codes) return Astro.redirect('/compare/');
+
+// Parse codes: "99285-vs-99283" or "99285-vs-99283"
+const parts = (codes as string).split('-vs-').map(s => s.trim());
+if (parts.length !== 2 || !parts[0] || !parts[1]) {
+  return Astro.redirect('/compare/');
+}
+
+const [codeA, codeB] = parts;
+const [procA, procB] = await Promise.all([getProcedure(codeA), getProcedure(codeB)]);
+
+if (!procA || !procB) {
+  return Astro.redirect('/compare/');
+}
+
+const a = procA as any;
+const b = procB as any;
+
+// Rate comparisons
+interface RateRow {
+  label: string;
+  aValue: number | null;
+  bValue: number | null;
+  description: string;
+}
+
+const rates: RateRow[] = [
+  {
+    label: 'Medicare Facility',
+    aValue: a.nationalFacilityRate,
+    bValue: b.nationalFacilityRate,
+    description: 'CMS PFS 2026 national facility rate'
+  },
+  {
+    label: 'Medicare Non-Facility',
+    aValue: a.nationalNonFacRate,
+    bValue: b.nationalNonFacRate,
+    description: 'CMS PFS 2026 non-facility (office) rate'
+  },
+  {
+    label: 'Hospital Outpatient (OPPS)',
+    aValue: a.hospitalOutpatientCost,
+    bValue: b.hospitalOutpatientCost,
+    description: 'CMS OPPS hospital outpatient rate'
+  },
+  {
+    label: 'Ambulatory Surgery Center',
+    aValue: a.ascCost,
+    bValue: b.ascCost,
+    description: 'CMS ASC surgery center rate'
+  },
+  {
+    label: 'Est. Commercial (Low)',
+    aValue: a.commercialEstimates?.facilityLow || (a.nationalFacilityRate ? a.nationalFacilityRate * 1.5 : null),
+    bValue: b.commercialEstimates?.facilityLow || (b.nationalFacilityRate ? b.nationalFacilityRate * 1.5 : null),
+    description: 'Estimated commercial insurance (150% Medicare)'
+  },
+  {
+    label: 'Est. Commercial (High)',
+    aValue: a.commercialEstimates?.facilityHigh || (a.nationalFacilityRate ? a.nationalFacilityRate * 2.5 : null),
+    bValue: b.commercialEstimates?.facilityHigh || (b.nationalFacilityRate ? b.nationalFacilityRate * 2.5 : null),
+    description: 'Estimated commercial insurance (250% Medicare)'
+  },
+];
+
+// Max value for bar scaling
+const allValues = rates.flatMap(r => [r.aValue, r.bValue]).filter(v => v != null) as number[];
+const maxRate = Math.max(...allValues, 1);
+
+const fmt = (v: number | null) => v != null ? formatCurrencyFull(v) : 'N/A';
+const pctDiff = (a: number | null, b: number | null) => {
+  if (!a || !b) return null;
+  return Math.round(((a - b) / b) * 100);
+};
+
+const mainDiff = pctDiff(a.nationalFacilityRate, b.nationalFacilityRate);
+const nameA = a.consumerName || a.description;
+const nameB = b.consumerName || b.description;
+
+const title = `${nameA} vs ${nameB} — Cost Comparison | MedicalCosts.info`;
+const description = `Compare costs: ${nameA} (CPT ${codeA}) vs ${nameB} (CPT ${codeB}). Side-by-side Medicare, hospital, surgery center, and commercial insurance rates.`;
+
+// Common comparison pairs to suggest
+const commonPairs = [
+  { a: '99285', b: '99283', label: 'ER Visit: High vs Moderate Complexity' },
+  { a: '72148', b: '72141', label: 'MRI: Lumbar Spine vs Cervical Spine' },
+  { a: '27447', b: '27130', label: 'Knee Replacement vs Hip Replacement' },
+  { a: '99213', b: '99214', label: 'Office Visit: Level 3 vs Level 4' },
+  { a: '45380', b: '45378', label: 'Colonoscopy with Biopsy vs Diagnostic' },
+  { a: '66984', b: '66982', label: 'Cataract Surgery: Standard vs Complex' },
+].filter(p => !(p.a === codeA && p.b === codeB));
+---
+
+<Base title={title} description={description} canonical={`/compare/${codeA}-vs-${codeB}/`}>
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/compare/" class="hover:text-brand-600">Compare</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">{codeA} vs {codeB}</span>
+    </nav>
+
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+      {nameA} vs {nameB}
+    </h1>
+    <p class="text-gray-500 mb-8">
+      Side-by-side cost comparison of CPT {codeA} and CPT {codeB}
+      {mainDiff !== null && (
+        <span class={`ml-2 font-semibold ${mainDiff > 0 ? 'text-red-600' : 'text-green-600'}`}>
+          ({mainDiff > 0 ? '+' : ''}{mainDiff}% difference)
+        </span>
+      )}
+    </p>
+
+    <!-- Side-by-side cards -->
+    <div class="grid md:grid-cols-2 gap-6 mb-10">
+      <div class="bg-white rounded-xl border-2 border-brand-500 p-6">
+        <div class="text-sm text-brand-600 font-mono mb-1">CPT {codeA}</div>
+        <h2 class="text-lg font-bold text-gray-900 mb-3">{nameA}</h2>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between"><span class="text-gray-500">Category</span><span class="font-medium">{a.category || 'N/A'}</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">Body System</span><span class="font-medium">{a.bodySystem || 'N/A'}</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">Total RVU</span><span class="font-medium">{a.totalRvu?.toFixed(2) || 'N/A'}</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">Medicare Rate</span><span class="font-bold text-green-700">{fmt(a.nationalFacilityRate)}</span></div>
+        </div>
+        <a href={`/procedures/${codeA}/`} class="block mt-4 text-sm text-brand-600 font-semibold hover:underline">View full details &rarr;</a>
+      </div>
+
+      <div class="bg-white rounded-xl border-2 border-orange-500 p-6">
+        <div class="text-sm text-orange-600 font-mono mb-1">CPT {codeB}</div>
+        <h2 class="text-lg font-bold text-gray-900 mb-3">{nameB}</h2>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between"><span class="text-gray-500">Category</span><span class="font-medium">{b.category || 'N/A'}</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">Body System</span><span class="font-medium">{b.bodySystem || 'N/A'}</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">Total RVU</span><span class="font-medium">{b.totalRvu?.toFixed(2) || 'N/A'}</span></div>
+          <div class="flex justify-between"><span class="text-gray-500">Medicare Rate</span><span class="font-bold text-green-700">{fmt(b.nationalFacilityRate)}</span></div>
+        </div>
+        <a href={`/procedures/${codeB}/`} class="block mt-4 text-sm text-orange-600 font-semibold hover:underline">View full details &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Visual bars comparison -->
+    <h2 class="text-2xl font-bold text-gray-900 mb-6">Cost Comparison by Setting</h2>
+    <div class="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 space-y-6">
+      {rates.map(rate => {
+        const aPct = rate.aValue ? (rate.aValue / maxRate) * 100 : 0;
+        const bPct = rate.bValue ? (rate.bValue / maxRate) * 100 : 0;
+        return (
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm font-medium text-gray-700">{rate.label}</span>
+              <span class="text-xs text-gray-400">{rate.description}</span>
+            </div>
+            <!-- Procedure A bar -->
+            <div class="flex items-center gap-3 mb-1">
+              <span class="text-xs text-brand-600 font-mono w-16 flex-shrink-0">{codeA}</span>
+              <div class="flex-1">
+                <div class="bg-brand-500 h-6 rounded-md flex items-center justify-end pr-2 shadow-sm"
+                  style={`width: ${Math.max(aPct, 5)}%`}>
+                  {rate.aValue && <span class="text-white text-xs font-bold">{fmt(rate.aValue)}</span>}
+                </div>
+              </div>
+            </div>
+            <!-- Procedure B bar -->
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-orange-600 font-mono w-16 flex-shrink-0">{codeB}</span>
+              <div class="flex-1">
+                <div class="bg-orange-500 h-6 rounded-md flex items-center justify-end pr-2 shadow-sm"
+                  style={`width: ${Math.max(bPct, 5)}%`}>
+                  {rate.bValue && <span class="text-white text-xs font-bold">{fmt(rate.bValue)}</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    <!-- Which one do you need? -->
+    <section class="mt-10 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 md:p-8 border border-blue-100">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Which One Do You Need?</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="font-bold text-brand-700 mb-2">CPT {codeA}: {nameA}</h3>
+          <p class="text-sm text-gray-600">
+            {a.category === b.category ? (
+              `This is the ${a.nationalFacilityRate > b.nationalFacilityRate ? 'higher-cost' : 'lower-cost'} option in the ${a.category} category. `
+            ) : (
+              `This belongs to the ${a.category} category. `
+            )}
+            {a.totalRvu && b.totalRvu && a.totalRvu > b.totalRvu
+              ? 'It is a more complex procedure (higher RVU) requiring more physician work, time, or resources.'
+              : a.totalRvu && b.totalRvu
+                ? 'It is a less complex procedure (lower RVU) typically requiring less time or fewer resources.'
+                : ''
+            }
+          </p>
+        </div>
+        <div>
+          <h3 class="font-bold text-orange-700 mb-2">CPT {codeB}: {nameB}</h3>
+          <p class="text-sm text-gray-600">
+            {a.category === b.category ? (
+              `This is the ${b.nationalFacilityRate > a.nationalFacilityRate ? 'higher-cost' : 'lower-cost'} option in the ${b.category} category. `
+            ) : (
+              `This belongs to the ${b.category} category. `
+            )}
+            {a.totalRvu && b.totalRvu && b.totalRvu > a.totalRvu
+              ? 'It is a more complex procedure (higher RVU) requiring more physician work, time, or resources.'
+              : a.totalRvu && b.totalRvu
+                ? 'It is a less complex procedure (lower RVU) typically requiring less time or fewer resources.'
+                : ''
+            }
+          </p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-4">
+        Your doctor determines which CPT code applies based on the specific clinical situation.
+        This comparison is for informational purposes to help you understand the cost differences.
+      </p>
+    </section>
+
+    <!-- Common Comparisons -->
+    {commonPairs.length > 0 && (
+      <section class="mt-10">
+        <h2 class="text-xl font-bold text-gray-900 mb-4">More Procedure Comparisons</h2>
+        <div class="grid sm:grid-cols-2 gap-3">
+          {commonPairs.map(pair => (
+            <a href={`/compare/${pair.a}-vs-${pair.b}/`}
+              class="bg-white rounded-lg border border-gray-200 p-4 hover:border-brand-500 hover:shadow-md transition-all group">
+              <div class="font-medium text-gray-900 group-hover:text-brand-700">{pair.label}</div>
+              <div class="text-xs text-gray-500 mt-1">CPT {pair.a} vs {pair.b}</div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+  </div>
+</Base>

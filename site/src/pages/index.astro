@@ -1,9 +1,19 @@
 ---
 import Base from '@/layouts/Base.astro';
-import { getStatistics, getCategories, formatCurrency, STATES } from '@/lib/api';
+import { getStatistics, getCategories, formatCurrency, STATES, getTrends } from '@/lib/api';
 
 const stats = await getStatistics();
 const { categories } = await getCategories();
+const trends = await getTrends();
+
+const cfData = (trends.medicare_conversion_factor || []).filter(d => d.year >= 2018 && d.year <= 2026);
+const cfYears = cfData.map(d => d.year);
+const cfValues = cfData.map(d => d.value);
+const cfMin = Math.floor(Math.min(...cfValues) - 0.5);
+const cfMax = Math.ceil(Math.max(...cfValues) + 0.5);
+function trendX(year: number) { return 40 + ((year - cfYears[0]) / (cfYears[cfYears.length - 1] - cfYears[0])) * 360; }
+function trendY(val: number) { return 15 + 110 - ((val - cfMin) / (cfMax - cfMin)) * 110; }
+const trendPoints = cfData.map(d => `${trendX(d.year)},${trendY(d.value)}`).join(' ');
 
 const topCategories = (categories || []).slice(0, 12);
 
@@ -384,6 +394,63 @@ const didYouKnowFacts = [
             {state.code}
           </a>
         ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Cost Trends -->
+  <section class="py-16 bg-white border-t border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-gray-900 mb-2 text-center">Healthcare Cost Trends</h2>
+      <p class="text-gray-500 text-center mb-8">Medicare conversion factor 2018-2026 — years of cuts, then a 2026 recovery</p>
+
+      <div class="max-w-2xl mx-auto bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-200 p-6">
+        <svg viewBox="0 0 420 170" class="w-full">
+          <!-- Grid -->
+          {[cfMin, cfMin + (cfMax - cfMin) * 0.5, cfMax].map(v => (
+            <g>
+              <line x1="40" x2="400" y1={trendY(v)} y2={trendY(v)} stroke="#e5e7eb" stroke-width="1" />
+              <text x="36" y={trendY(v) + 4} text-anchor="end" fill="#9ca3af" font-size="8">${v.toFixed(0)}</text>
+            </g>
+          ))}
+          {cfData.map(d => (
+            <text x={trendX(d.year)} y="155" text-anchor="middle" fill="#9ca3af" font-size="8">{d.year}</text>
+          ))}
+          <!-- Line -->
+          <polyline points={trendPoints} fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" />
+          <!-- Dots -->
+          {cfData.map(d => (
+            <circle cx={trendX(d.year)} cy={trendY(d.value)} r="3"
+              fill={d.year === 2026 ? '#16a34a' : d.value < 34 ? '#dc2626' : '#2563eb'} />
+          ))}
+          <!-- 2026 callout -->
+          {cfData.filter(d => d.year === 2026).map(d => (
+            <g>
+              <text x={trendX(d.year)} y={trendY(d.value) - 8} text-anchor="middle" fill="#16a34a" font-size="9" font-weight="bold">
+                ${d.value}
+              </text>
+            </g>
+          ))}
+        </svg>
+        <div class="flex items-center justify-between mt-4">
+          <div class="text-xs text-gray-500">Medicare Conversion Factor ($/RVU) &mdash; Source: CMS PFS</div>
+          <a href="/trends/" class="text-sm text-brand-600 font-semibold hover:underline">See full trends &rarr;</a>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-3 gap-4 mt-8 max-w-2xl mx-auto">
+        <div class="bg-red-50 rounded-xl p-4 text-center border border-red-100">
+          <div class="text-xl font-bold text-red-600">-10.5%</div>
+          <div class="text-xs text-gray-600 mt-1">Medicare CF decline (2020-25)</div>
+        </div>
+        <div class="bg-orange-50 rounded-xl p-4 text-center border border-orange-100">
+          <div class="text-xl font-bold text-orange-600">+32.6%</div>
+          <div class="text-xs text-gray-600 mt-1">Medical CPI rise (2015-26)</div>
+        </div>
+        <div class="bg-green-50 rounded-xl p-4 text-center border border-green-100">
+          <div class="text-xl font-bold text-green-600">+3.25%</div>
+          <div class="text-xs text-gray-600 mt-1">2026 Medicare CF increase</div>
+        </div>
       </div>
     </div>
   </section>

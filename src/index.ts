@@ -88,6 +88,7 @@ export default {
       if (path === "/api/search") return handleUnifiedSearch(url, env, cors);
       if (path === "/api/body-systems") return handleBodySystems(env, cors);
       if (path === "/api/hospitals") return handleHospitals(url, env, cors);
+      if (path === "/api/trends") return handleTrends(env, cors);
 
       // Body system detail
       const bodySystemMatch = path.match(/^\/api\/body-systems\/([^/]+)$/);
@@ -166,6 +167,7 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/related/:code",
         "GET /api/search?q=term",
         "GET /api/hospitals?state=CO&drg=470",
+        "GET /api/trends",
       ],
     },
     cors,
@@ -1270,6 +1272,34 @@ async function handleMetricsFacts(env: Env, cors: Record<string, string>): Promi
   ).all();
 
   return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/trends — Cost trend data (Medicare CF, Medical CPI, YoY changes)
+// ---------------------------------------------------------------------------
+
+async function handleTrends(env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT metric, year, value, source
+     FROM cost_trends
+     WHERE metric IN ('medicare_conversion_factor', 'medical_cpi_annual_avg', 'medical_cpi_yoy_pct_change', 'medicare_cf_yoy_pct_change')
+     ORDER BY metric, year`,
+  ).all();
+
+  // Group by metric
+  const grouped: Record<string, Array<{ year: number; value: number; source: string }>> = {};
+  for (const row of results) {
+    const r = row as Record<string, unknown>;
+    const metric = r.metric as string;
+    if (!grouped[metric]) grouped[metric] = [];
+    grouped[metric].push({
+      year: r.year as number,
+      value: r.value as number,
+      source: r.source as string,
+    });
+  }
+
+  return success(grouped, cors);
 }
 
 // ---------------------------------------------------------------------------

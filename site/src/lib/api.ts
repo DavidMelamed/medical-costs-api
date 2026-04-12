@@ -386,6 +386,18 @@ export async function getMetrics(): Promise<Record<string, any[]>> {
   return data?.metrics || {};
 }
 
+// Cost trends
+export interface TrendPoint {
+  year: number;
+  value: number;
+  source: string;
+}
+
+export async function getTrends(): Promise<Record<string, TrendPoint[]>> {
+  const data = await fetchApi<Record<string, TrendPoint[]>>('/trends');
+  return data || {};
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },

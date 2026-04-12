@@ -51,6 +51,8 @@ const segmentLabels: Record<string, string> = {
   about: "About",
   methodology: "Methodology",
   costs: "Costs",
+  trends: "Cost Trends",
+  map: "Heat Map",
 };
 let breadcrumbPath = '';
 for (let i = 0; i < pathSegments.length; i++) {
@@ -102,7 +104,7 @@ const breadcrumbSchema = {
             <span class="text-xl font-bold text-gray-900">MedicalCosts<span class="text-brand-600">.info</span></span>
           </a>
           <!-- Desktop nav -->
-          <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
+          <div class="hidden md:flex items-center gap-4 text-sm font-medium text-gray-600">
             <a href="/procedures/" class="hover:text-brand-600 transition-colors">Procedures</a>
             <a href="/categories/" class="hover:text-brand-600 transition-colors">Categories</a>
             <a href="/conditions/" class="hover:text-brand-600 transition-colors">Conditions</a>
@@ -110,8 +112,18 @@ const breadcrumbSchema = {
             <a href="/drg/" class="hover:text-brand-600 transition-colors">Hospital Stays</a>
             <a href="/states/" class="hover:text-brand-600 transition-colors">By State</a>
             <a href="/estimator/" class="hover:text-brand-600 transition-colors">Estimator</a>
-            <a href="/my-costs/" class="hover:text-brand-600 transition-colors">My Costs</a>
-            <a href="/settlement-calculator/" class="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Settlement Calculator</a>
+            <a href="/settlement-calculator/" class="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Settlement</a>
+            <!-- Search with autocomplete -->
+            <div class="relative" id="search-container">
+              <input
+                id="nav-search"
+                type="text"
+                placeholder="Search..."
+                autocomplete="off"
+                class="w-36 lg:w-48 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 placeholder-gray-400"
+              />
+              <div id="search-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto" style="min-width: 320px; right: auto;"></div>
+            </div>
           </div>
           <!-- Mobile hamburger button -->
           <button
@@ -176,6 +188,8 @@ const breadcrumbSchema = {
               <li><a href="/my-costs/" class="hover:text-white">My Cost List</a></li>
               <li><a href="/compare/" class="hover:text-white">Compare Costs</a></li>
               <li><a href="/states/" class="hover:text-white">Costs by State</a></li>
+              <li><a href="/states/map/" class="hover:text-white">US Cost Heat Map</a></li>
+              <li><a href="/trends/" class="hover:text-white">Cost Trends</a></li>
               <li><a href="/about/" class="hover:text-white">About</a></li>
               <li><a href="/methodology/" class="hover:text-white">Methodology</a></li>
             </ul>
@@ -201,6 +215,7 @@ const breadcrumbSchema = {
     <CostList />
 
     <script>
+      // Mobile menu toggle
       const btn = document.getElementById('mobile-menu-btn');
       const menu = document.getElementById('mobile-menu');
       const iconOpen = document.getElementById('menu-icon-open');
@@ -215,6 +230,106 @@ const breadcrumbSchema = {
           btn.setAttribute('aria-expanded', String(!isOpen));
         });
       }
+
+      // Search autocomplete
+      (function() {
+        var input = document.getElementById('nav-search') as HTMLInputElement | null;
+        var dropdown = document.getElementById('search-dropdown');
+        if (!input || !dropdown) return;
+
+        var debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        var API_URL = 'https://medical-costs-api.david-568.workers.dev/api/search';
+
+        function fmt(n: number | null) {
+          if (!n) return '';
+          return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+        }
+
+        function renderResults(data: any) {
+          if (!dropdown) return;
+          var html = '';
+          var procs = (data.procedures || []).slice(0, 4);
+          var conds = (data.conditions || []).slice(0, 2);
+          var drugs = (data.drugs || []).slice(0, 2);
+
+          if (procs.length === 0 && conds.length === 0 && drugs.length === 0) {
+            dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500">No results found</div>';
+            dropdown.classList.remove('hidden');
+            return;
+          }
+
+          if (procs.length > 0) {
+            html += '<div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Procedures</div>';
+            for (var i = 0; i < procs.length; i++) {
+              var p = procs[i];
+              var href = p.slug ? '/procedures/' + p.slug + '/' : '/procedures/' + p.code + '/';
+              var name = p.consumerName || p.description;
+              html += '<a href="' + href + '" class="block px-4 py-2 hover:bg-brand-50 transition-colors border-b border-gray-50">' +
+                '<div class="text-sm font-medium text-gray-900 truncate">' + name + '</div>' +
+                '<div class="flex items-center gap-2 text-xs text-gray-500">' +
+                  '<span class="font-mono">CPT ' + p.code + '</span>' +
+                  (p.nationalFacilityRate ? '<span class="text-green-700 font-semibold">' + fmt(p.nationalFacilityRate) + '</span>' : '') +
+                '</div></a>';
+            }
+          }
+
+          if (conds.length > 0) {
+            html += '<div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Conditions</div>';
+            for (var j = 0; j < conds.length; j++) {
+              var c = conds[j];
+              html += '<a href="/conditions/' + c.slug + '/" class="block px-4 py-2 hover:bg-brand-50 transition-colors border-b border-gray-50">' +
+                '<div class="text-sm font-medium text-gray-900">' + c.name + '</div>' +
+                '<div class="text-xs text-gray-500">' + (c.bodyRegion || 'Condition') + '</div></a>';
+            }
+          }
+
+          if (drugs.length > 0) {
+            html += '<div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Drugs</div>';
+            for (var k = 0; k < drugs.length; k++) {
+              var d = drugs[k];
+              var dhref = d.slug ? '/drugs/' + d.slug + '/' : '/drugs/' + d.code + '/';
+              html += '<a href="' + dhref + '" class="block px-4 py-2 hover:bg-brand-50 transition-colors border-b border-gray-50">' +
+                '<div class="text-sm font-medium text-gray-900 truncate">' + (d.consumerName || d.description) + '</div>' +
+                '<div class="text-xs text-gray-500 font-mono">' + d.code + '</div></a>';
+            }
+          }
+
+          dropdown.innerHTML = html;
+          dropdown.classList.remove('hidden');
+        }
+
+        input.addEventListener('input', function() {
+          var q = (input as HTMLInputElement).value.trim();
+          if (debounceTimer) clearTimeout(debounceTimer);
+          if (q.length < 2) {
+            if (dropdown) dropdown.classList.add('hidden');
+            return;
+          }
+          debounceTimer = setTimeout(function() {
+            fetch(API_URL + '?q=' + encodeURIComponent(q) + '&limit=8')
+              .then(function(r) { return r.json(); })
+              .then(function(json) {
+                if (json.success) renderResults(json.data);
+              })
+              .catch(function() {});
+          }, 300);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+          var container = document.getElementById('search-container');
+          if (container && !container.contains(e.target as Node)) {
+            if (dropdown) dropdown.classList.add('hidden');
+          }
+        });
+
+        // Navigate on Enter
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && dropdown) {
+            dropdown.classList.add('hidden');
+          }
+        });
+      })();
     </script>
   </body>
 </html>

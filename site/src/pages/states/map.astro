@@ -1,0 +1,251 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getMetrics, STATES } from '@/lib/api';
+
+const metricsData = await getMetrics();
+const stateIndex = (metricsData.state_cost_index || []) as Array<{ key: string; value: number; label: string; detail: string }>;
+
+// Build lookup
+const stateMap: Record<string, { value: number; label: string }> = {};
+for (const s of stateIndex) {
+  stateMap[s.key] = { value: s.value, label: s.label };
+}
+
+const values = stateIndex.map(s => s.value);
+const minCost = Math.min(...values);
+const maxCost = Math.max(...values);
+
+const title = 'US Medical Cost Heat Map — Compare Healthcare Prices by State | MedicalCosts.info';
+const description = 'Interactive heat map showing medical cost variation across all 50 US states. Colors range from green (affordable) to red (expensive) based on Medicare GPCI-adjusted rates.';
+
+// State path data for SVG map of the US
+// Each state uses a simplified bounding box positioned roughly geographically
+// We'll use a grid-based cartogram for clarity
+const stateGrid: Array<{ code: string; row: number; col: number }> = [
+  { code: 'AK', row: 0, col: 0 }, { code: 'ME', row: 0, col: 10 },
+  { code: 'WI', row: 1, col: 5 }, { code: 'VT', row: 1, col: 9 }, { code: 'NH', row: 1, col: 10 },
+  { code: 'WA', row: 1, col: 0 }, { code: 'ID', row: 1, col: 1 }, { code: 'MT', row: 1, col: 2 },
+  { code: 'ND', row: 1, col: 3 }, { code: 'MN', row: 1, col: 4 }, { code: 'MI', row: 1, col: 7 },
+  { code: 'NY', row: 1, col: 8 },
+  { code: 'OR', row: 2, col: 0 }, { code: 'NV', row: 2, col: 1 }, { code: 'WY', row: 2, col: 2 },
+  { code: 'SD', row: 2, col: 3 }, { code: 'IA', row: 2, col: 4 }, { code: 'IL', row: 2, col: 5 },
+  { code: 'IN', row: 2, col: 6 }, { code: 'OH', row: 2, col: 7 }, { code: 'PA', row: 2, col: 8 },
+  { code: 'NJ', row: 2, col: 9 }, { code: 'CT', row: 2, col: 10 }, { code: 'RI', row: 2, col: 11 },
+  { code: 'CA', row: 3, col: 0 }, { code: 'UT', row: 3, col: 1 }, { code: 'CO', row: 3, col: 2 },
+  { code: 'NE', row: 3, col: 3 }, { code: 'MO', row: 3, col: 4 }, { code: 'KY', row: 3, col: 5 },
+  { code: 'WV', row: 3, col: 6 }, { code: 'VA', row: 3, col: 7 }, { code: 'MD', row: 3, col: 8 },
+  { code: 'DE', row: 3, col: 9 }, { code: 'MA', row: 3, col: 10 },
+  { code: 'AZ', row: 4, col: 1 }, { code: 'NM', row: 4, col: 2 }, { code: 'KS', row: 4, col: 3 },
+  { code: 'AR', row: 4, col: 4 }, { code: 'TN', row: 4, col: 5 }, { code: 'NC', row: 4, col: 7 },
+  { code: 'SC', row: 4, col: 8 }, { code: 'DC', row: 4, col: 9 },
+  { code: 'OK', row: 5, col: 3 }, { code: 'LA', row: 5, col: 4 }, { code: 'MS', row: 5, col: 5 },
+  { code: 'AL', row: 5, col: 6 }, { code: 'GA', row: 5, col: 7 }, { code: 'FL', row: 5, col: 8 },
+  { code: 'HI', row: 6, col: 0 }, { code: 'TX', row: 5, col: 2 },
+];
+
+function getColor(value: number): string {
+  const range = maxCost - minCost;
+  const pct = (value - minCost) / range;
+  // Green (120) to Red (0) in HSL
+  const hue = Math.round(120 * (1 - pct));
+  const sat = 65 + Math.round(20 * pct);
+  return `hsl(${hue}, ${sat}%, 45%)`;
+}
+
+function getTextColor(value: number): string {
+  return '#ffffff';
+}
+
+// Legend stops
+const legendStops = 6;
+const legendItems = Array.from({ length: legendStops }, (_, i) => {
+  const pct = i / (legendStops - 1);
+  const val = minCost + pct * (maxCost - minCost);
+  return { value: Math.round(val), color: getColor(val) };
+});
+---
+
+<Base title={title} description={description} canonical="/states/map/">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/states/" class="hover:text-brand-600">States</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Heat Map</span>
+    </nav>
+
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">US Medical Cost Heat Map</h1>
+    <p class="text-gray-500 mb-8 max-w-3xl">
+      Compare healthcare prices across all 50 states. Colors range from
+      <span class="font-semibold" style="color: hsl(120, 65%, 45%)">green (affordable)</span> to
+      <span class="font-semibold" style="color: hsl(0, 85%, 45%)">red (expensive)</span> based on
+      average GPCI-adjusted Medicare procedure costs.
+    </p>
+
+    <!-- Legend -->
+    <div class="flex items-center gap-2 mb-6 flex-wrap">
+      <span class="text-sm text-gray-600 font-medium mr-2">Cost Index:</span>
+      <span class="text-xs text-gray-500">${legendItems[0].value}</span>
+      <div class="flex h-5 rounded overflow-hidden" style="width: 200px;">
+        {legendItems.map((item, i) => (
+          <div style={`flex:1; background:${item.color}`}></div>
+        ))}
+      </div>
+      <span class="text-xs text-gray-500">${legendItems[legendItems.length - 1].value}</span>
+      <span class="text-xs text-gray-400 ml-2">(avg GPCI-adjusted cost per procedure)</span>
+    </div>
+
+    <!-- SVG Cartogram -->
+    <div class="bg-white rounded-2xl border border-gray-200 p-4 md:p-8 overflow-x-auto">
+      <svg viewBox="0 0 780 480" class="w-full" style="max-width: 900px; margin: 0 auto; display: block;">
+        {stateGrid.map(s => {
+          const data = stateMap[s.code];
+          if (!data) return null;
+          const x = s.col * 65 + 10;
+          const y = s.row * 65 + 10;
+          const color = getColor(data.value);
+          return (
+            <a href={`/states/${s.code.toLowerCase()}/`}>
+              <g class="state-cell" data-state={s.code} data-cost={data.value}>
+                <rect
+                  x={x} y={y} width="58" height="58" rx="6"
+                  fill={color}
+                  stroke="white" stroke-width="2"
+                  class="hover:opacity-80 transition-opacity cursor-pointer"
+                />
+                <text x={x + 29} y={y + 24} text-anchor="middle" fill="white"
+                  font-size="14" font-weight="bold">{s.code}</text>
+                <text x={x + 29} y={y + 42} text-anchor="middle" fill="rgba(255,255,255,0.85)"
+                  font-size="10">${Math.round(data.value)}</text>
+              </g>
+            </a>
+          );
+        })}
+      </svg>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="map-tooltip" class="hidden fixed z-50 bg-gray-900 text-white text-sm rounded-lg px-4 py-3 shadow-xl pointer-events-none" style="max-width: 250px;">
+      <div id="tooltip-state" class="font-bold"></div>
+      <div id="tooltip-cost" class="text-blue-300"></div>
+    </div>
+
+    <!-- Rankings Table -->
+    <div class="mt-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">State Cost Rankings</h2>
+      <p class="text-gray-500 mb-6">All states ranked by average GPCI-adjusted Medicare procedure cost</p>
+
+      <div class="grid md:grid-cols-2 gap-8">
+        <!-- Most Expensive -->
+        <div>
+          <h3 class="font-bold text-red-700 mb-3">Most Expensive States</h3>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b bg-gray-50 text-xs text-gray-500 uppercase">
+                  <th class="px-4 py-2 text-left">Rank</th>
+                  <th class="px-4 py-2 text-left">State</th>
+                  <th class="px-4 py-2 text-right">Avg Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stateIndex.sort((a, b) => b.value - a.value).slice(0, 10).map((s, i) => (
+                  <tr class="border-b hover:bg-gray-50">
+                    <td class="px-4 py-2 text-gray-400">#{i + 1}</td>
+                    <td class="px-4 py-2">
+                      <a href={`/states/${s.key.toLowerCase()}/`} class="text-brand-600 hover:underline font-medium">
+                        {s.label}
+                      </a>
+                    </td>
+                    <td class="px-4 py-2 text-right font-semibold">${Math.round(s.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Least Expensive -->
+        <div>
+          <h3 class="font-bold text-green-700 mb-3">Most Affordable States</h3>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b bg-gray-50 text-xs text-gray-500 uppercase">
+                  <th class="px-4 py-2 text-left">Rank</th>
+                  <th class="px-4 py-2 text-left">State</th>
+                  <th class="px-4 py-2 text-right">Avg Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stateIndex.sort((a, b) => a.value - b.value).slice(0, 10).map((s, i) => (
+                  <tr class="border-b hover:bg-gray-50">
+                    <td class="px-4 py-2 text-gray-400">#{i + 1}</td>
+                    <td class="px-4 py-2">
+                      <a href={`/states/${s.key.toLowerCase()}/`} class="text-brand-600 hover:underline font-medium">
+                        {s.label}
+                      </a>
+                    </td>
+                    <td class="px-4 py-2 text-right font-semibold text-green-700">${Math.round(s.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Takeaways -->
+    <div class="mt-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 md:p-8 border border-blue-100">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Key Takeaways</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div>
+          <div class="text-3xl font-extrabold text-red-600">${Math.round(maxCost)}</div>
+          <div class="text-sm text-gray-600 mt-1">Highest avg cost (Alaska)</div>
+          <p class="text-xs text-gray-500 mt-2">Remote location drives up practice costs, malpractice insurance, and supply expenses.</p>
+        </div>
+        <div>
+          <div class="text-3xl font-extrabold text-green-600">${Math.round(minCost)}</div>
+          <div class="text-sm text-gray-600 mt-1">Lowest avg cost (Arkansas)</div>
+          <p class="text-xs text-gray-500 mt-2">Lower cost of living translates to lower practice expenses and Medicare reimbursement.</p>
+        </div>
+        <div>
+          <div class="text-3xl font-extrabold text-brand-600">{Math.round((maxCost / minCost - 1) * 100)}%</div>
+          <div class="text-sm text-gray-600 mt-1">Cost gap (highest vs lowest)</div>
+          <p class="text-xs text-gray-500 mt-2">The same medical procedure can cost {Math.round(maxCost / minCost * 10) / 10}x more depending on where you live.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tooltip interactivity
+    const tooltip = document.getElementById('map-tooltip');
+    const tooltipState = document.getElementById('tooltip-state');
+    const tooltipCost = document.getElementById('tooltip-cost');
+
+    document.querySelectorAll('.state-cell').forEach(el => {
+      el.addEventListener('mouseenter', (e) => {
+        const state = el.getAttribute('data-state');
+        const cost = el.getAttribute('data-cost');
+        if (tooltipState && tooltipCost && tooltip) {
+          tooltipState.textContent = state || '';
+          tooltipCost.textContent = `Avg procedure cost: $${Math.round(Number(cost))}`;
+          tooltip.classList.remove('hidden');
+        }
+      });
+      el.addEventListener('mousemove', (e: Event) => {
+        const me = e as MouseEvent;
+        if (tooltip) {
+          tooltip.style.left = me.clientX + 12 + 'px';
+          tooltip.style.top = me.clientY - 40 + 'px';
+        }
+      });
+      el.addEventListener('mouseleave', () => {
+        if (tooltip) tooltip.classList.add('hidden');
+      });
+    });
+  </script>
+</Base>

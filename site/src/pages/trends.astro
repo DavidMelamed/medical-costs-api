@@ -1,0 +1,268 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getTrends } from '@/lib/api';
+
+const trends = await getTrends();
+
+const cfData = (trends.medicare_conversion_factor || []).filter(d => d.year >= 2015 && d.year <= 2026);
+const cpiData = (trends.medical_cpi_annual_avg || []).filter(d => d.year >= 2015 && d.year <= 2026);
+const cpiYoy = (trends.medical_cpi_yoy_pct_change || []).filter(d => d.year >= 2016 && d.year <= 2026);
+const cfYoy = (trends.medicare_cf_yoy_pct_change || []).filter(d => d.year >= 2016 && d.year <= 2026);
+
+// SVG dimensions
+const chartW = 700;
+const chartH = 300;
+const padL = 55;
+const padR = 20;
+const padT = 20;
+const padB = 40;
+const plotW = chartW - padL - padR;
+const plotH = chartH - padT - padB;
+
+// Medicare CF line chart
+const cfValues = cfData.map(d => d.value);
+const cfMin = Math.floor(Math.min(...cfValues) - 0.5);
+const cfMax = Math.ceil(Math.max(...cfValues) + 0.5);
+const cfYears = cfData.map(d => d.year);
+
+function cfX(year: number) {
+  return padL + ((year - cfYears[0]) / (cfYears[cfYears.length - 1] - cfYears[0])) * plotW;
+}
+function cfY(val: number) {
+  return padT + plotH - ((val - cfMin) / (cfMax - cfMin)) * plotH;
+}
+
+const cfPoints = cfData.map(d => `${cfX(d.year)},${cfY(d.value)}`).join(' ');
+
+// CPI bar chart
+const cpiYoyValues = cpiYoy.map(d => d.value);
+const cpiMax = Math.ceil(Math.max(...cpiYoyValues) + 0.5);
+const barW = plotW / cpiYoy.length * 0.7;
+const barGap = plotW / cpiYoy.length;
+
+function barX(i: number) {
+  return padL + i * barGap + (barGap - barW) / 2;
+}
+function barH(val: number) {
+  return (val / cpiMax) * plotH;
+}
+
+// Medicare CF YoY chart pre-computation
+const cfYoyValues = cfYoy.map(d => d.value);
+const cfYoyMin = Math.floor(Math.min(...cfYoyValues) - 0.5);
+const cfYoyMax = Math.ceil(Math.max(...cfYoyValues) + 0.5);
+const cfYoyRange = cfYoyMax - cfYoyMin;
+const plotH2 = 240;
+const zeroY = padT + plotH2 - ((0 - cfYoyMin) / cfYoyRange) * plotH2;
+const barGap2 = plotW / cfYoy.length;
+const barW2 = barGap2 * 0.7;
+
+function cfYoyBarX(i: number) { return padL + i * barGap2 + (barGap2 - barW2) / 2; }
+function cfYoyGridY(v: number) { return padT + plotH2 - ((v - cfYoyMin) / cfYoyRange) * plotH2; }
+
+const cfYoyGridLines = [-3, -2, -1, 0, 1, 2, 3, 4].filter(v => v >= cfYoyMin && v <= cfYoyMax);
+
+const cfYoyBars = cfYoy.map((d, i) => {
+  const bx = cfYoyBarX(i);
+  const isPos = d.value >= 0;
+  const h = Math.abs(d.value / cfYoyRange) * plotH2;
+  const y = isPos ? zeroY - h : zeroY;
+  const color = isPos ? '#16a34a' : '#dc2626';
+  const textY = isPos ? y - 5 : y + h + 14;
+  const label = (d.value > 0 ? '+' : '') + d.value.toFixed(1) + '%';
+  return { bx, y, h, color, textY, label, year: d.year };
+});
+
+const title = 'Medical Cost Trends 2015-2026 — Medicare & CPI Data | MedicalCosts.info';
+const description = 'Track medical cost trends from 2015-2026. See Medicare conversion factor changes, Medical CPI growth, and year-over-year healthcare inflation data from CMS and BLS.';
+---
+
+<Base title={title} description={description} canonical="/trends/">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Cost Trends</span>
+    </nav>
+
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Medical Cost Trends (2015 - 2026)</h1>
+    <p class="text-gray-500 mb-10 max-w-3xl">
+      Track how healthcare costs have changed over the past decade. Medicare conversion factors, Medical CPI,
+      and year-over-year inflation rates from official CMS and BLS data.
+    </p>
+
+    <!-- Medicare Conversion Factor Line Chart -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Medicare Conversion Factor ($/RVU)</h2>
+      <p class="text-gray-500 mb-6 text-sm">
+        The Medicare Physician Fee Schedule conversion factor converts Relative Value Units (RVUs) into dollar amounts.
+        It has been declining since 2020 before a 2026 recovery to $33.40.
+      </p>
+
+      <div class="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 overflow-x-auto">
+        <svg viewBox={`0 0 ${chartW} ${chartH}`} class="w-full" style="max-width: 750px;">
+          <!-- Grid lines -->
+          {[cfMin, cfMin + (cfMax - cfMin) * 0.25, cfMin + (cfMax - cfMin) * 0.5, cfMin + (cfMax - cfMin) * 0.75, cfMax].map(v => (
+            <g>
+              <line x1={padL} x2={chartW - padR} y1={cfY(v)} y2={cfY(v)}
+                stroke="#e5e7eb" stroke-width="1" />
+              <text x={padL - 8} y={cfY(v) + 4} text-anchor="end" fill="#6b7280" font-size="11">
+                ${v.toFixed(1)}
+              </text>
+            </g>
+          ))}
+          <!-- X-axis labels -->
+          {cfData.map(d => (
+            <text x={cfX(d.year)} y={chartH - 8} text-anchor="middle" fill="#6b7280" font-size="11">
+              {d.year}
+            </text>
+          ))}
+          <!-- Line -->
+          <polyline points={cfPoints} fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round" />
+          <!-- Dots + values -->
+          {cfData.map(d => (
+            <g>
+              <circle cx={cfX(d.year)} cy={cfY(d.value)} r="4" fill="#2563eb" />
+              <text x={cfX(d.year)} y={cfY(d.value) - 10} text-anchor="middle" fill="#1e40af" font-size="10" font-weight="bold">
+                ${d.value.toFixed(2)}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+
+      <!-- CF data table -->
+      <div class="mt-4 bg-gray-50 rounded-xl p-4">
+        <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-2 text-center text-xs">
+          {cfData.map(d => (
+            <div class="bg-white rounded-lg p-2 border">
+              <div class="font-bold text-gray-900">{d.year}</div>
+              <div class={`font-semibold ${d.year === 2026 ? 'text-green-600' : d.value < 34.5 ? 'text-red-600' : 'text-gray-700'}`}>
+                ${d.value.toFixed(2)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Medical CPI YoY Bar Chart -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Medical CPI Year-Over-Year Change (%)</h2>
+      <p class="text-gray-500 mb-6 text-sm">
+        The Medical Care Consumer Price Index from the Bureau of Labor Statistics. Medical inflation has consistently
+        outpaced general inflation, with notable spikes in 2020 and 2022.
+      </p>
+
+      <div class="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 overflow-x-auto">
+        <svg viewBox={`0 0 ${chartW} ${chartH}`} class="w-full" style="max-width: 750px;">
+          <!-- Grid lines -->
+          {[0, 1, 2, 3, 4, 5].filter(v => v <= cpiMax).map(v => (
+            <g>
+              <line x1={padL} x2={chartW - padR}
+                y1={padT + plotH - (v / cpiMax) * plotH}
+                y2={padT + plotH - (v / cpiMax) * plotH}
+                stroke="#e5e7eb" stroke-width="1" />
+              <text x={padL - 8} y={padT + plotH - (v / cpiMax) * plotH + 4} text-anchor="end" fill="#6b7280" font-size="11">
+                {v}%
+              </text>
+            </g>
+          ))}
+          <!-- Bars -->
+          {cpiYoy.map((d, i) => {
+            const h = barH(d.value);
+            const y = padT + plotH - h;
+            const color = d.value > 3.5 ? '#dc2626' : d.value > 2.5 ? '#f59e0b' : '#16a34a';
+            return (
+              <g>
+                <rect x={barX(i)} y={y} width={barW} height={h} rx="3" fill={color} opacity="0.85" />
+                <text x={barX(i) + barW / 2} y={y - 5} text-anchor="middle" fill={color} font-size="10" font-weight="bold">
+                  {d.value.toFixed(1)}%
+                </text>
+                <text x={barX(i) + barW / 2} y={padT + plotH + 16} text-anchor="middle" fill="#6b7280" font-size="10">
+                  {d.year}
+                </text>
+              </g>
+            );
+          })}
+          <!-- Zero line -->
+          <line x1={padL} x2={chartW - padR} y1={padT + plotH} y2={padT + plotH} stroke="#374151" stroke-width="1" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- Medicare CF YoY Change -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Medicare Conversion Factor YoY Change (%)</h2>
+      <p class="text-gray-500 mb-6 text-sm">
+        While medical costs rise with CPI, Medicare reimbursement to physicians has been cut year after year.
+        The 2026 increase (+3.25%) is the first meaningful raise in over a decade.
+      </p>
+
+      <div class="bg-white rounded-2xl border border-gray-200 p-4 md:p-6 overflow-x-auto">
+        <svg viewBox={`0 0 ${chartW} 320`} class="w-full" style="max-width: 750px;">
+          {/* Grid */}
+          {cfYoyGridLines.map(v => {
+            const gy = cfYoyGridY(v);
+            return (
+              <g>
+                <line x1={padL} x2={chartW - padR} y1={gy} y2={gy}
+                  stroke={v === 0 ? '#374151' : '#e5e7eb'} stroke-width={v === 0 ? 1.5 : 1} />
+                <text x={padL - 8} y={gy + 4} text-anchor="end" fill="#6b7280" font-size="11">{v}%</text>
+              </g>
+            );
+          })}
+          {/* Bars */}
+          {cfYoyBars.map(bar => (
+            <g>
+              <rect x={bar.bx} y={bar.y} width={barW2} height={bar.h} rx="3" fill={bar.color} opacity="0.85" />
+              <text x={bar.bx + barW2 / 2} y={bar.textY} text-anchor="middle" fill={bar.color} font-size="9" font-weight="bold">
+                {bar.label}
+              </text>
+              <text x={bar.bx + barW2 / 2} y={padT + plotH2 + 30} text-anchor="middle" fill="#6b7280" font-size="10">
+                {bar.year}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </section>
+
+    <!-- Key Insights -->
+    <section class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 md:p-8 border border-blue-100 mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Key Insights</h2>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white rounded-xl p-5 border border-blue-100">
+          <div class="text-2xl font-extrabold text-red-600">-10.5%</div>
+          <div class="text-sm text-gray-600 mt-1">Medicare CF decline (2020-2025)</div>
+          <p class="text-xs text-gray-500 mt-2">Physicians received less per RVU even as their costs rose.</p>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-blue-100">
+          <div class="text-2xl font-extrabold text-orange-600">+32.6%</div>
+          <div class="text-sm text-gray-600 mt-1">Medical CPI rise (2015-2026)</div>
+          <p class="text-xs text-gray-500 mt-2">Healthcare inflation far outpaces general inflation (23%).</p>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-blue-100">
+          <div class="text-2xl font-extrabold text-green-600">+3.25%</div>
+          <div class="text-sm text-gray-600 mt-1">2026 Medicare CF increase</div>
+          <p class="text-xs text-gray-500 mt-2">First significant increase in the conversion factor since 2020.</p>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-blue-100">
+          <div class="text-2xl font-extrabold text-brand-600">$33.40</div>
+          <div class="text-sm text-gray-600 mt-1">2026 Conversion Factor</div>
+          <p class="text-xs text-gray-500 mt-2">Still below the 2015 level of $35.80 despite a decade of inflation.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Methodology -->
+    <section class="text-sm text-gray-500 max-w-3xl">
+      <h2 class="text-lg font-bold text-gray-900 mb-2">Data Sources</h2>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Medicare Conversion Factor: CMS Physician Fee Schedule (CY 2015-2026 Final Rules)</li>
+        <li>Medical CPI: Bureau of Labor Statistics, FRED Series CPIMEDSL (Medical Care CPI-U)</li>
+        <li>Year-over-year changes computed from annual averages</li>
+      </ul>
+    </section>
+  </div>
+</Base>
