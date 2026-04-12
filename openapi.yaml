@@ -1,0 +1,822 @@
+openapi: 3.1.0
+info:
+  title: Medical Costs API
+  version: 1.0.0
+  description: |
+    Medical procedure costs, injury mappings, drug prices, hospital costs, and crash severity estimates
+    powered by CMS Medicare PFS, CDC WISQARS, NADAC, NY SPARCS, and NHTSA data.
+
+    **Base URL:** `https://medical-costs-api.david-568.workers.dev`
+
+    All endpoints return JSON with the structure:
+    ```json
+    { "success": true, "data": { ... } }
+    ```
+    or on error:
+    ```json
+    { "success": false, "error": "Error message" }
+    ```
+  contact:
+    name: MedicalCosts.info
+    url: https://medical-costs-site.pages.dev
+  license:
+    name: Public Domain Data
+    identifier: CC0-1.0
+
+servers:
+  - url: https://medical-costs-api.david-568.workers.dev
+    description: Production (Cloudflare Workers)
+
+paths:
+  /:
+    get:
+      summary: API info and endpoint listing
+      operationId: getRoot
+      tags: [Meta]
+      responses:
+        '200':
+          description: API metadata and list of available endpoints
+
+  /api/procedures:
+    get:
+      summary: List medical procedures
+      operationId: listProcedures
+      tags: [Procedures]
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Search by code or description
+          example: "knee"
+        - name: category
+          in: query
+          schema: { type: string }
+          description: Filter by category
+          example: "Orthopedic Surgery"
+        - name: bodySystem
+          in: query
+          schema: { type: string }
+          description: Filter by body system
+          example: "Musculoskeletal"
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated list of procedures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcedureListResponse'
+
+  /api/procedures/{code}:
+    get:
+      summary: Get procedure details by CPT/HCPCS code
+      operationId: getProcedure
+      tags: [Procedures]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+          example: "99285"
+      responses:
+        '200':
+          description: Procedure detail with rates and geographic data
+        '404':
+          description: Procedure not found
+
+  /api/procedures/by-slug/{slug}:
+    get:
+      summary: Get procedure by URL slug
+      operationId: getProcedureBySlug
+      tags: [Procedures]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+          example: "er-visit-high-severity"
+      responses:
+        '200':
+          description: Procedure detail
+
+  /api/procedures/{code}/consumer:
+    get:
+      summary: Get consumer-friendly procedure description
+      operationId: getConsumerDescription
+      tags: [Procedures]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Consumer-friendly name and description
+
+  /api/related/{code}:
+    get:
+      summary: Get related procedures by code
+      operationId: getRelatedProcedures
+      tags: [Procedures]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of related procedures in the same category
+
+  /api/alternatives/{code}:
+    get:
+      summary: Get alternative procedures
+      operationId: getAlternatives
+      tags: [Procedures]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Alternative treatment options with cost comparison
+
+  /api/categories:
+    get:
+      summary: List procedure categories
+      operationId: listCategories
+      tags: [Procedures]
+      responses:
+        '200':
+          description: All procedure categories with counts
+
+  /api/body-systems:
+    get:
+      summary: List body systems
+      operationId: listBodySystems
+      tags: [Procedures]
+      responses:
+        '200':
+          description: Body systems with procedure counts
+
+  /api/body-systems/{slug}:
+    get:
+      summary: Get body system detail with procedures
+      operationId: getBodySystemDetail
+      tags: [Procedures]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+          example: "musculoskeletal"
+        - name: limit
+          in: query
+          schema: { type: integer, default: 200, maximum: 500 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Body system with its procedures
+
+  /api/injuries:
+    get:
+      summary: List injury categories
+      operationId: listInjuries
+      tags: [Injuries]
+      parameters:
+        - name: relevance
+          in: query
+          schema: { type: string, enum: [MOTOR_VEHICLE, TOXIC_EXPOSURE, WORKPLACE, GENERAL, PEDESTRIAN, BICYCLE] }
+        - name: bodyRegion
+          in: query
+          schema: { type: string }
+          example: "Head"
+      responses:
+        '200':
+          description: List of injury categories
+
+  /api/injuries/{slug}:
+    get:
+      summary: Get injury category detail with mapped procedures
+      operationId: getInjuryDetail
+      tags: [Injuries]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+          example: "traumatic-brain-injury"
+      responses:
+        '200':
+          description: Injury with mapped procedures and cost data
+        '404':
+          description: Injury not found
+
+  /api/injuries/{slug}/estimate:
+    get:
+      summary: Get cost estimate for an injury
+      operationId: getInjuryEstimate
+      tags: [Injuries]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - name: severity
+          in: query
+          schema: { type: string, default: "moderate", enum: [mild, moderate, severe] }
+        - name: state
+          in: query
+          schema: { type: string, default: "CO" }
+          example: "CO"
+      responses:
+        '200':
+          description: Cost estimate broken down by procedure
+
+  /api/crash-estimate:
+    get:
+      summary: Get crash severity cost estimate
+      operationId: getCrashEstimate
+      tags: [Injuries]
+      parameters:
+        - name: severity
+          in: query
+          schema: { type: string, default: "MINOR_INJURY", enum: [PROPERTY_DAMAGE, POSSIBLE_INJURY, MINOR_INJURY, MODERATE_INJURY, SERIOUS_INJURY, SEVERE_INJURY, FATAL] }
+        - name: state
+          in: query
+          schema: { type: string }
+          example: "CO"
+      responses:
+        '200':
+          description: Cost ranges based on crash severity
+
+  /api/settlement-estimate:
+    get:
+      summary: Estimate personal injury settlement range
+      operationId: getSettlementEstimate
+      tags: [Injuries]
+      parameters:
+        - name: injury
+          in: query
+          required: true
+          schema: { type: string }
+          description: Injury category slug
+          example: "whiplash"
+        - name: severity
+          in: query
+          schema: { type: string, default: "moderate", enum: [mild, moderate, severe] }
+        - name: state
+          in: query
+          schema: { type: string, default: "CO" }
+      responses:
+        '200':
+          description: Settlement estimate with medical costs, pain & suffering multiplier
+
+  /api/compare:
+    get:
+      summary: Compare procedure costs across states
+      operationId: compareCosts
+      tags: [Geographic]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+          example: "99285"
+        - name: states
+          in: query
+          schema: { type: string, default: "CO,CA,TX,NY,FL" }
+          description: Comma-separated state codes
+      responses:
+        '200':
+          description: Side-by-side cost comparison across states
+
+  /api/statistics:
+    get:
+      summary: Get database statistics
+      operationId: getStatistics
+      tags: [Meta]
+      responses:
+        '200':
+          description: Database counts and summary statistics
+
+  /api/metrics:
+    get:
+      summary: Get key metrics and dashboard data
+      operationId: getMetrics
+      tags: [Meta]
+      responses:
+        '200':
+          description: Summary metrics for the platform
+
+  /api/metrics/facts:
+    get:
+      summary: Get interesting medical cost facts
+      operationId: getMetricsFacts
+      tags: [Meta]
+      responses:
+        '200':
+          description: Curated facts about medical costs
+
+  /api/search:
+    get:
+      summary: Unified search across procedures, conditions, and drugs
+      operationId: search
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+          description: Search query (min 2 characters)
+          example: "mri"
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 50 }
+      responses:
+        '200':
+          description: Search results grouped by type (procedures, conditions, drugs)
+
+  /api/graph/{type}/{id}:
+    get:
+      summary: Get knowledge graph relationships
+      operationId: getGraph
+      tags: [Search]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { type: string, enum: [procedure, injury, category, body-system] }
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: relationship
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: Related entities in the knowledge graph
+
+  /api/drg:
+    get:
+      summary: List DRG (hospital stay) codes
+      operationId: listDrgs
+      tags: [Hospital]
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string, enum: [SURG, MED] }
+          description: Surgical or Medical
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 500 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated list of DRG codes with average costs
+
+  /api/drg/{code}:
+    get:
+      summary: Get DRG detail
+      operationId: getDrgDetail
+      tags: [Hospital]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+          example: "470"
+      responses:
+        '200':
+          description: DRG detail with hospital-level cost data
+
+  /api/hospitals:
+    get:
+      summary: Search hospitals with cost data
+      operationId: listHospitals
+      tags: [Hospital]
+      parameters:
+        - name: state
+          in: query
+          schema: { type: string }
+          example: "CO"
+        - name: drg
+          in: query
+          schema: { type: string }
+          example: "470"
+        - name: provider
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, default: "charges_desc" }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 500 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Hospital cost data
+
+  /api/hospitals/rankings:
+    get:
+      summary: Get hospital cost rankings
+      operationId: getHospitalRankings
+      tags: [Hospital]
+      parameters:
+        - name: metric
+          in: query
+          schema: { type: string, default: "charges", enum: [charges, payments, discharges] }
+        - name: direction
+          in: query
+          schema: { type: string, default: "desc", enum: [asc, desc] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, maximum: 100 }
+      responses:
+        '200':
+          description: Ranked list of hospitals by cost metric
+
+  /api/hospitals/states:
+    get:
+      summary: List states with hospital data
+      operationId: getHospitalStates
+      tags: [Hospital]
+      responses:
+        '200':
+          description: States with hospital counts
+
+  /api/hospitals/{state}/drgs:
+    get:
+      summary: Get top DRGs for a state
+      operationId: getHospitalStateDrgs
+      tags: [Hospital]
+      parameters:
+        - name: state
+          in: path
+          required: true
+          schema: { type: string }
+          example: "CO"
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 534 }
+      responses:
+        '200':
+          description: DRGs available in the given state
+
+  /api/insurers:
+    get:
+      summary: List insurance companies with payment data
+      operationId: listInsurers
+      tags: [Insurance]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: Insurance payer data with average payments
+
+  /api/insurance-plans:
+    get:
+      summary: Search insurance plans (ACA marketplace)
+      operationId: listInsurancePlans
+      tags: [Insurance]
+      parameters:
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: metal
+          in: query
+          schema: { type: string, enum: [bronze, silver, gold, platinum, catastrophic] }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Filtered list of insurance plans
+
+  /api/oop-calculator:
+    get:
+      summary: Calculate out-of-pocket costs for procedures
+      operationId: calculateOop
+      tags: [Insurance]
+      parameters:
+        - name: codes
+          in: query
+          required: true
+          schema: { type: string }
+          description: Comma-separated CPT codes
+          example: "99285,27447"
+        - name: deductible
+          in: query
+          schema: { type: number, default: 0 }
+        - name: deductible_met
+          in: query
+          schema: { type: number, default: 0 }
+        - name: coinsurance
+          in: query
+          schema: { type: number, default: 0.2 }
+          description: Patient coinsurance rate (0-1)
+        - name: oop_max
+          in: query
+          schema: { type: number, default: 9450 }
+        - name: copay
+          in: query
+          schema: { type: number, default: 0 }
+        - name: setting
+          in: query
+          schema: { type: string, default: "facility", enum: [facility, non_facility, asc, hospital_outpatient] }
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: plan_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Calculated OOP cost breakdown per procedure
+
+  /api/trends:
+    get:
+      summary: Get medical cost trends over time
+      operationId: getTrends
+      tags: [Meta]
+      responses:
+        '200':
+          description: Historical cost trend data
+
+  /api/negotiated-rates:
+    get:
+      summary: Get negotiated rates for a procedure
+      operationId: getNegotiatedRates
+      tags: [Transparency]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+          example: "99285"
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: payer
+          in: query
+          schema: { type: string }
+        - name: setting
+          in: query
+          schema: { type: string, enum: [inpatient, outpatient] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 500, maximum: 1000 }
+      responses:
+        '200':
+          description: Negotiated rate data from payers
+
+  /api/bill-check:
+    get:
+      summary: Check if a medical bill is reasonable
+      operationId: checkBill
+      tags: [Transparency]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+          example: "99285"
+        - name: amount
+          in: query
+          required: true
+          schema: { type: number }
+          example: 2500
+        - name: state
+          in: query
+          schema: { type: string }
+          example: "CO"
+      responses:
+        '200':
+          description: Bill analysis with fair price range and verdict
+
+  /api/drugs/compare:
+    get:
+      summary: Compare brand vs generic drug prices
+      operationId: compareDrugs
+      tags: [Drugs]
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          schema: { type: string }
+          example: "ozempic"
+      responses:
+        '200':
+          description: Brand vs generic price comparison
+
+  /api/drugs/categories:
+    get:
+      summary: List drug categories
+      operationId: listDrugCategories
+      tags: [Drugs]
+      responses:
+        '200':
+          description: Drug therapeutic categories with counts
+
+  /api/drugs/glp1:
+    get:
+      summary: Get GLP-1 drug prices (Ozempic, Wegovy, etc.)
+      operationId: getGlp1Drugs
+      tags: [Drugs]
+      responses:
+        '200':
+          description: GLP-1 weight loss / diabetes drug pricing
+
+  /api/medications/{conditionSlug}:
+    get:
+      summary: Get medications for a condition
+      operationId: getMedications
+      tags: [Drugs]
+      parameters:
+        - name: conditionSlug
+          in: path
+          required: true
+          schema: { type: string }
+          example: "type-2-diabetes"
+      responses:
+        '200':
+          description: Medications commonly used for the condition
+
+  /api/auto-insurance/{state}:
+    get:
+      summary: Get auto insurance requirements by state
+      operationId: getAutoInsurance
+      tags: [Insurance]
+      parameters:
+        - name: state
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Z]{2}$" }
+          example: "CO"
+      responses:
+        '200':
+          description: State auto insurance minimums and fault system info
+
+  /api/og:
+    get:
+      summary: Generate dynamic OG image (SVG)
+      operationId: getOgImage
+      tags: [Meta]
+      parameters:
+        - name: title
+          in: query
+          schema: { type: string, default: "Medical Cost Data" }
+          example: "MRI Cost"
+        - name: price
+          in: query
+          schema: { type: string }
+          example: "$85"
+        - name: type
+          in: query
+          schema: { type: string, default: "procedure", enum: [procedure, drug, drg, condition] }
+      responses:
+        '200':
+          description: SVG image (1200x630)
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+
+  /api/embed/{code}:
+    get:
+      summary: Get embeddable HTML widget for a procedure
+      operationId: getEmbed
+      tags: [Meta]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+          example: "99285"
+      responses:
+        '200':
+          description: Self-contained HTML widget
+          content:
+            text/html:
+              schema:
+                type: string
+
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: string
+
+    ProcedureListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Procedure'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Procedure:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "99285"
+        codeType:
+          type: string
+          example: "CPT"
+        description:
+          type: string
+          example: "Emergency dept visit, high severity"
+        category:
+          type: string
+          example: "Emergency Medicine"
+        bodySystem:
+          type: string
+          example: "General"
+        workRvu:
+          type: number
+        totalRvu:
+          type: number
+        nationalFacilityRate:
+          type: number
+          example: 472.85
+        nationalNonFacRate:
+          type: number
+          example: 472.85
+        consumerName:
+          type: string
+          example: "Emergency Room Visit (High Severity)"
+        slug:
+          type: string
+          example: "er-visit-high-severity"
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+tags:
+  - name: Procedures
+    description: CPT/HCPCS procedure codes with Medicare rates
+  - name: Injuries
+    description: Injury categories, cost estimates, and settlement calculators
+  - name: Hospital
+    description: DRG codes, hospital costs, and rankings
+  - name: Drugs
+    description: Drug pricing, brand vs generic, and GLP-1 data
+  - name: Insurance
+    description: Insurance plans, OOP calculator, and auto insurance
+  - name: Geographic
+    description: State-by-state cost comparisons
+  - name: Transparency
+    description: Negotiated rates and bill checking
+  - name: Search
+    description: Unified search and knowledge graph
+  - name: Meta
+    description: Statistics, metrics, OG images, and embeds

@@ -165,7 +165,9 @@ const schema = {
         <tbody>
           {hospitals.map(h => (
               <tr class="border-b border-gray-100 hover:bg-gray-50">
-                <td class="py-3 pr-4 font-medium text-gray-900">{h.name}</td>
+                <td class="py-3 pr-4 font-medium text-gray-900">
+                  <a href={`/hospitals/profile/${h.ccn}/`} class="hover:text-teal-600">{h.name}</a>
+                </td>
                 <td class="py-3 pr-4 text-gray-500">{h.city}</td>
                 <td class="py-3 pr-4 text-right font-semibold text-gray-700">{formatCurrencyFull(h.avgCharges)}</td>
                 <td class="py-3 pr-4 text-right text-gray-700">{formatCurrencyFull(h.avgPayments)}</td>

@@ -325,3 +325,44 @@ CREATE TABLE IF NOT EXISTS state_auto_insurance (
   uninsured_rate REAL
 );
 CREATE INDEX IF NOT EXISTS idx_sai_fault ON state_auto_insurance(fault_system);
+
+-- ============================================================================
+-- People Also Ask (PAA) — harvested from Google SERP via DataForSEO
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS people_also_ask (
+  id TEXT PRIMARY KEY,
+  procedure_code TEXT,
+  query TEXT,
+  question TEXT,
+  answer_snippet TEXT,
+  source_url TEXT,
+  source_domain TEXT,
+  position INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_paa_code ON people_also_ask(procedure_code);
+
+-- ============================================================================
+-- Hospital Quality (CMS Hospital Compare — Star Ratings & Quality Measures)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS hospital_quality (
+  provider_id TEXT PRIMARY KEY,
+  hospital_name TEXT,
+  city TEXT,
+  state TEXT,
+  zip TEXT,
+  overall_rating INTEGER,
+  patient_experience_rating TEXT,
+  readmission_rating TEXT,
+  mortality_rating TEXT,
+  safety_rating TEXT,
+  timeliness_rating TEXT,
+  effectiveness_rating TEXT,
+  hospital_type TEXT,
+  ownership TEXT,
+  emergency_services TEXT,
+  latitude REAL,
+  longitude REAL
+);
+CREATE INDEX IF NOT EXISTS idx_hq_state ON hospital_quality(state);
+CREATE INDEX IF NOT EXISTS idx_hq_rating ON hospital_quality(overall_rating);

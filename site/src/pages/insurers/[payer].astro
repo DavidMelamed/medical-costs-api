@@ -1,0 +1,216 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getInsurerDetail, formatCurrencyFull, slugify } from '@/lib/api';
+
+const { payer } = Astro.params;
+const data = await getInsurerDetail(payer!);
+
+if (!data) {
+  return Astro.redirect('/insurers/');
+}
+
+const { payerName, summary, byProcedure, byHospital, medicareBaseline, overallAvgRate } = data;
+const medicareAvg = medicareBaseline?.avgMedicarePayment || 10000;
+
+// Is this payer expensive or cheap?
+const medicareMultiplier = medicareAvg > 0 ? Math.round((summary.avgRate / medicareAvg) * 10) / 10 : null;
+const vsOverall = overallAvgRate > 0 ? Math.round(((summary.avgRate - overallAvgRate) / overallAvgRate) * 100) : null;
+
+let costVerdict: string;
+let verdictColor: string;
+if (vsOverall !== null) {
+  if (vsOverall <= -20) { costVerdict = 'significantly cheaper than average'; verdictColor = 'text-green-700'; }
+  else if (vsOverall <= -5) { costVerdict = 'somewhat cheaper than average'; verdictColor = 'text-green-600'; }
+  else if (vsOverall <= 5) { costVerdict = 'about average'; verdictColor = 'text-blue-600'; }
+  else if (vsOverall <= 20) { costVerdict = 'somewhat more expensive than average'; verdictColor = 'text-orange-600'; }
+  else { costVerdict = 'significantly more expensive than average'; verdictColor = 'text-red-600'; }
+} else {
+  costVerdict = 'N/A';
+  verdictColor = 'text-gray-500';
+}
+
+const topProcedures = byProcedure.slice(0, 25);
+const topHospitals = byHospital.slice(0, 20);
+
+const title = `${payerName} — What They Pay for Medical Procedures | MedicalCosts.info`;
+const description = `See what ${payerName} actually pays hospitals for medical procedures. Analysis of ${summary.totalRates.toLocaleString()} negotiated rates across ${summary.hospitalCount} hospitals and ${summary.proceduresCovered} procedures.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": payerName,
+  "description": `Insurance company rate analysis for ${payerName}`,
+  "url": `https://medicalcosts.info/insurers/${payer}/`,
+};
+---
+
+<Base title={title} description={description} canonical={`/insurers/${payer}/`} schema={schema}>
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-indigo-700 via-indigo-800 to-purple-900 text-white py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="text-sm text-indigo-200 mb-6">
+        <a href="/" class="hover:text-white">Home</a>
+        <span class="mx-2">/</span>
+        <a href="/insurers/" class="hover:text-white">Insurers</a>
+        <span class="mx-2">/</span>
+        <span class="text-white font-medium">{payerName}</span>
+      </nav>
+      <h1 class="text-3xl md:text-4xl font-extrabold mb-3">{payerName}</h1>
+      <p class="text-xl text-indigo-100 max-w-3xl">
+        What does {payerName} actually pay hospitals? We analyzed
+        <strong>{summary.totalRates.toLocaleString()} negotiated rates</strong> from
+        <strong>{summary.hospitalCount} hospitals</strong> across
+        <strong>{summary.stateCount} states</strong>.
+      </p>
+    </div>
+  </section>
+
+  <!-- Key Stats -->
+  <section class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-6 text-center">
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{formatCurrencyFull(summary.avgRate)}</div>
+          <div class="text-sm text-gray-500">Avg Negotiated Rate</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{summary.totalRates.toLocaleString()}</div>
+          <div class="text-sm text-gray-500">Total Rates</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{summary.proceduresCovered}</div>
+          <div class="text-sm text-gray-500">Procedures Covered</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{summary.hospitalCount}</div>
+          <div class="text-sm text-gray-500">Hospitals in Network</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{summary.stateCount}</div>
+          <div class="text-sm text-gray-500">States</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- Is this payer expensive or cheap? -->
+    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-8 border border-indigo-100 mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Is {payerName} Expensive or Cheap?</h2>
+      <div class="grid sm:grid-cols-3 gap-6 mb-6">
+        <div class="bg-white rounded-xl p-5 border border-gray-200">
+          <div class="text-sm text-gray-500 mb-1">Avg Rate</div>
+          <div class="text-2xl font-bold text-gray-900">{formatCurrencyFull(summary.avgRate)}</div>
+          <div class="text-xs text-gray-400 mt-1">Range: {formatCurrencyFull(summary.minRate)} - {formatCurrencyFull(summary.maxRate)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-200">
+          <div class="text-sm text-gray-500 mb-1">vs All Payers Average</div>
+          {vsOverall !== null ? (
+            <div class={`text-2xl font-bold ${verdictColor}`}>
+              {vsOverall > 0 ? '+' : ''}{vsOverall}%
+            </div>
+          ) : (
+            <div class="text-2xl font-bold text-gray-400">N/A</div>
+          )}
+          <div class="text-xs text-gray-400 mt-1">All-payer avg: {formatCurrencyFull(overallAvgRate)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-200">
+          <div class="text-sm text-gray-500 mb-1">vs Medicare</div>
+          {medicareMultiplier !== null ? (
+            <div class={`text-2xl font-bold ${medicareMultiplier > 2 ? 'text-red-600' : medicareMultiplier > 1 ? 'text-blue-600' : 'text-green-600'}`}>
+              {medicareMultiplier}x Medicare
+            </div>
+          ) : (
+            <div class="text-2xl font-bold text-gray-400">N/A</div>
+          )}
+          <div class="text-xs text-gray-400 mt-1">Medicare avg: {formatCurrencyFull(medicareAvg)}</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-lg p-4 border border-gray-200">
+        <p class="text-gray-700">
+          Based on our analysis of {summary.totalRates.toLocaleString()} negotiated rates,
+          <strong>{payerName}</strong> is <strong class={verdictColor}>{costVerdict}</strong> compared to other insurance companies in our database.
+          {medicareMultiplier !== null && medicareMultiplier > 1 && ` They pay roughly ${medicareMultiplier}x what Medicare pays for equivalent services.`}
+          {medicareMultiplier !== null && medicareMultiplier <= 1 && ` They pay roughly the same or less than Medicare for equivalent services.`}
+        </p>
+      </div>
+    </div>
+
+    <!-- Top Procedures -->
+    <h2 class="text-2xl font-bold text-gray-900 mb-2">Top Procedures with Negotiated Rates</h2>
+    <p class="text-gray-500 mb-6">Procedures where {payerName} has the most rate data</p>
+    <div class="overflow-x-auto mb-10">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b-2 border-gray-200 text-left">
+            <th class="py-3 pr-4 font-semibold text-gray-600">Code</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600">Description</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Rates</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Rate</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Min</th>
+            <th class="py-3 font-semibold text-gray-600 text-right">Max</th>
+          </tr>
+        </thead>
+        <tbody>
+          {topProcedures.map((p: any) => (
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+              <td class="py-3 pr-4 font-mono text-indigo-600 text-xs">{p.code}</td>
+              <td class="py-3 pr-4 text-gray-900 max-w-xs truncate">{p.description}</td>
+              <td class="py-3 pr-4 text-right text-gray-500">{p.totalRates}</td>
+              <td class="py-3 pr-4 text-right font-semibold text-gray-700">{formatCurrencyFull(p.avgRate)}</td>
+              <td class="py-3 pr-4 text-right text-green-600">{formatCurrencyFull(p.minRate)}</td>
+              <td class="py-3 text-right text-red-600">{formatCurrencyFull(p.maxRate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Hospitals in Network -->
+    <h2 class="text-2xl font-bold text-gray-900 mb-2">Hospitals with {payerName} Rates</h2>
+    <p class="text-gray-500 mb-6">Hospitals where we have negotiated rate data for {payerName}</p>
+    <div class="overflow-x-auto mb-10">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b-2 border-gray-200 text-left">
+            <th class="py-3 pr-4 font-semibold text-gray-600">Hospital</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600">State</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Rates</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Procedures</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Rate</th>
+            <th class="py-3 font-semibold text-gray-600 text-right">Range</th>
+          </tr>
+        </thead>
+        <tbody>
+          {topHospitals.map((h: any) => (
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+              <td class="py-3 pr-4 font-medium text-gray-900">{h.hospitalName}</td>
+              <td class="py-3 pr-4 text-gray-500">{h.hospitalState}</td>
+              <td class="py-3 pr-4 text-right text-gray-500">{h.totalRates}</td>
+              <td class="py-3 pr-4 text-right text-gray-500">{h.proceduresCovered}</td>
+              <td class="py-3 pr-4 text-right font-semibold text-gray-700">{formatCurrencyFull(h.avgRate)}</td>
+              <td class="py-3 text-right text-gray-500 text-xs">
+                {h.minRate !== h.maxRate
+                  ? `${formatCurrencyFull(h.minRate)} - ${formatCurrencyFull(h.maxRate)}`
+                  : formatCurrencyFull(h.minRate)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Back link -->
+    <div class="flex flex-wrap gap-4 mb-10">
+      <a href="/insurers/" class="inline-flex items-center px-5 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-semibold hover:bg-indigo-100 transition-colors border border-indigo-200">
+        View All Insurance Companies
+      </a>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="bg-amber-50 rounded-xl border border-amber-200 p-6 text-sm text-amber-800">
+      <h3 class="font-semibold text-amber-900 mb-2">About This Data</h3>
+      <p>These rates are from hospital Machine-Readable Files (MRFs) required by the CMS Hospital Price Transparency Rule. They reflect specific hospital-payer contracts and may not represent your actual cost, which depends on your specific plan, deductible, copay, coinsurance, and network status. Data sources include CommonSpirit Health, HCA Healthcare, and Kaiser Permanente filings.</p>
+    </div>
+  </div>
+</Base>

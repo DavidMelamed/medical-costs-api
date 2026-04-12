@@ -28,4 +28,12 @@
     <loc>https://medical-costs-site.pages.dev/sitemap-states.xml</loc>
     <lastmod>2026-04-12</lastmod>
   </sitemap>
+  <sitemap>
+    <loc>https://medical-costs-site.pages.dev/sitemap-hospitals.xml</loc>
+    <lastmod>2026-04-12</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://medical-costs-site.pages.dev/sitemap-insurers.xml</loc>
+    <lastmod>2026-04-12</lastmod>
+  </sitemap>
 </sitemapindex>

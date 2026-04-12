@@ -1,0 +1,185 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const title = 'Embed Medical Cost Widget — MedicalCosts.info';
+const description = 'Add a free medical cost widget to your website. Show Medicare rates, commercial estimates, and procedure details with one line of code.';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "name": title,
+  "description": description,
+  "url": "https://medical-costs-site.pages.dev/embed/"
+};
+---
+
+<Base title={title} description={description} canonical="/embed/" schema={schema}>
+  <div class="max-w-4xl mx-auto px-4 py-12">
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">Embed Cost Widget</h1>
+    <p class="text-lg text-gray-600 mb-8">
+      Add free, real-time medical cost data to your website with a single line of code.
+      The widget shows Medicare rates, estimated commercial prices, and links to full details.
+    </p>
+
+    <!-- Quick start -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Quick Start</h2>
+      <p class="text-gray-600 mb-3">
+        Add this script tag to your HTML. Replace <code class="bg-gray-100 px-1 rounded text-sm">99285</code> with any CPT/HCPCS code:
+      </p>
+      <div class="bg-gray-900 rounded-lg p-4 mb-4 overflow-x-auto">
+        <pre class="text-green-400 text-sm font-mono whitespace-pre">&lt;script
+  src="https://medical-costs-site.pages.dev/embed.js"
+  data-procedure="99285"&gt;
+&lt;/script&gt;</pre>
+      </div>
+      <p class="text-sm text-gray-500">The widget will appear where you place the script tag.</p>
+    </section>
+
+    <!-- Live demo -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Live Demo</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase mb-2">ER Visit (CPT 99285)</h3>
+          <div id="demo-widget-1"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 uppercase mb-2">Knee Replacement (CPT 27447)</h3>
+          <div id="demo-widget-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Options -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Options</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="text-left px-4 py-3 font-semibold text-gray-700 border-b">Attribute</th>
+              <th class="text-left px-4 py-3 font-semibold text-gray-700 border-b">Required</th>
+              <th class="text-left px-4 py-3 font-semibold text-gray-700 border-b">Default</th>
+              <th class="text-left px-4 py-3 font-semibold text-gray-700 border-b">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="px-4 py-3 border-b font-mono text-blue-700">data-procedure</td>
+              <td class="px-4 py-3 border-b text-red-600">Yes</td>
+              <td class="px-4 py-3 border-b text-gray-400">&mdash;</td>
+              <td class="px-4 py-3 border-b text-gray-600">CPT or HCPCS procedure code</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 border-b font-mono text-blue-700">data-theme</td>
+              <td class="px-4 py-3 border-b text-gray-400">No</td>
+              <td class="px-4 py-3 border-b font-mono">light</td>
+              <td class="px-4 py-3 border-b text-gray-600">"light" or "dark"</td>
+            </tr>
+            <tr>
+              <td class="px-4 py-3 border-b font-mono text-blue-700">data-width</td>
+              <td class="px-4 py-3 border-b text-gray-400">No</td>
+              <td class="px-4 py-3 border-b font-mono">100%</td>
+              <td class="px-4 py-3 border-b text-gray-600">Widget width (max 420px)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Dark theme example -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Dark Theme</h2>
+      <div class="bg-gray-900 rounded-lg p-4 mb-4 overflow-x-auto">
+        <pre class="text-green-400 text-sm font-mono whitespace-pre">&lt;script
+  src="https://medical-costs-site.pages.dev/embed.js"
+  data-procedure="99285"
+  data-theme="dark"&gt;
+&lt;/script&gt;</pre>
+      </div>
+    </section>
+
+    <!-- API embed endpoint -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">HTML Embed Endpoint</h2>
+      <p class="text-gray-600 mb-3">
+        You can also use our HTML embed endpoint directly in an iframe:
+      </p>
+      <div class="bg-gray-900 rounded-lg p-4 mb-4 overflow-x-auto">
+        <pre class="text-green-400 text-sm font-mono whitespace-pre">&lt;iframe
+  src="https://medical-costs-api.david-568.workers.dev/api/embed/99285"
+  width="420"
+  height="250"
+  frameborder="0"
+  style="border:none;max-width:100%"&gt;
+&lt;/iframe&gt;</pre>
+      </div>
+    </section>
+
+    <!-- Popular codes -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Popular Procedure Codes</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {[
+          { code: '99285', name: 'ER Visit (High Severity)' },
+          { code: '99213', name: 'Office Visit (Established)' },
+          { code: '27447', name: 'Total Knee Replacement' },
+          { code: '27130', name: 'Total Hip Replacement' },
+          { code: '70553', name: 'Brain MRI with Contrast' },
+          { code: '71046', name: 'Chest X-Ray (2 Views)' },
+          { code: '43239', name: 'Upper GI Endoscopy' },
+          { code: '29881', name: 'Knee Arthroscopy' },
+          { code: '99284', name: 'ER Visit (Moderate)' },
+        ].map(p => (
+          <div class="flex items-center justify-between border border-gray-200 rounded-lg px-4 py-3">
+            <div>
+              <span class="font-mono text-sm text-blue-700">{p.code}</span>
+              <span class="text-sm text-gray-600 ml-2">{p.name}</span>
+            </div>
+            <button
+              class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition-colors copy-btn"
+              data-code={p.code}
+            >
+              Copy
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <div class="bg-gray-50 rounded-lg p-6 text-sm text-gray-500">
+      <p><strong class="text-gray-700">Need help?</strong> Check the <a href="/api-docs/" class="text-blue-600 hover:underline">full API documentation</a> for more endpoints and options.</p>
+    </div>
+  </div>
+
+  <!-- Load demo widgets -->
+  <script src="/embed.js" data-procedure="99285"></script>
+  <script>
+    // Move the widget into the demo container
+    setTimeout(() => {
+      const widgets = document.querySelectorAll('script[data-procedure]');
+      widgets.forEach(s => {
+        const next = s.nextElementSibling;
+        if (next && next.style) {
+          const target = document.getElementById('demo-widget-1');
+          if (target && target.childElementCount === 0) {
+            target.appendChild(next);
+          }
+        }
+      });
+    }, 2000);
+
+    // Copy buttons
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.getAttribute('data-code');
+        const text = `<script src="https://medical-costs-site.pages.dev/embed.js" data-procedure="${code}"><\/script>`;
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+      });
+    });
+  </script>
+</Base>

@@ -1,7 +1,7 @@
 ---
 import Base from '@/layouts/Base.astro';
 import RelatedLinks from '@/components/RelatedLinks.astro';
-import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, getGraphRelationships, getConsumerDescription, getAlternatives, getNegotiatedRates, formatCurrencyFull, slugify, STATES } from '@/lib/api';
+import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, getGraphRelationships, getConsumerDescription, getAlternatives, getNegotiatedRates, getPaaQuestions, formatCurrencyFull, slugify, STATES } from '@/lib/api';
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect('/procedures/');
@@ -20,13 +20,14 @@ if (!procedure) return Astro.redirect(`/procedures/?search=${encodeURIComponent(
 const p = procedure as any;
 
 // Fetch related procedures, knowledge graph, consumer description, and interesting facts in parallel
-const [relatedProcedures, graphData, consumerDesc, interestingFacts, alternativesData, negotiatedRates] = await Promise.all([
+const [relatedProcedures, graphData, consumerDesc, interestingFacts, alternativesData, negotiatedRates, paaQuestions] = await Promise.all([
   getRelatedProcedures(p.code),
   getGraphRelationships('procedure', p.code),
   getConsumerDescription(p.code),
   getMetricsFacts(),
   getAlternatives(p.code),
   getNegotiatedRates(p.code),
+  getPaaQuestions(p.code),
 ]);
 
 // Group negotiated rates by major payer for display
@@ -116,6 +117,18 @@ const faqSchema = {
         "text": `Most health insurance plans cover ${shortName} when medically necessary, though you'll typically pay a copay or coinsurance. Your out-of-pocket cost depends on your deductible, plan type, and whether the provider is in-network. Medicare covers this procedure at ${priceStr || 'the standard rate'}.`
       }
     },
+    // Add PAA questions with snippets to FAQ schema for enhanced SEO
+    ...paaQuestions
+      .filter((paa: any) => paa.answerSnippet)
+      .slice(0, 4)
+      .map((paa: any) => ({
+        "@type": "Question",
+        "name": paa.question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": paa.answerSnippet,
+        },
+      })),
   ]
 };
 ---
@@ -469,7 +482,7 @@ const faqSchema = {
                 <tbody class="divide-y">
                   {topPayers.map((tp: any) => (
                     <tr class="hover:bg-gray-50">
-                      <td class="py-2.5 pr-4 font-medium text-gray-900">{tp.payerName}</td>
+                      <td class="py-2.5 pr-4 font-medium text-gray-900"><a href={`/insurers/${slugify(tp.payerName)}/`} class="hover:text-indigo-600">{tp.payerName}</a></td>
                       <td class="py-2.5 text-right font-semibold">{formatCurrencyFull(tp.avgRate)}</td>
                       <td class="py-2.5 text-right text-gray-500 text-xs">
                         {tp.minRate !== tp.maxRate
@@ -673,6 +686,41 @@ const faqSchema = {
               Note: Alternative procedures may not be clinically appropriate for all patients.
               Always consult your physician to determine the best option for your specific situation.
             </p>
+          </div>
+        )}
+
+        <!-- People Also Ask (from Google SERP data) -->
+        {paaQuestions.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+              <h2 class="text-xl font-bold text-gray-900">People Also Ask</h2>
+              <p class="text-sm text-gray-500">Common questions people search for about this procedure</p>
+            </div>
+            <div class="divide-y divide-gray-100">
+              {paaQuestions.map((paa: any) => (
+                <details class="group">
+                  <summary class="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <span class="font-medium text-gray-900 pr-4">{paa.question}</span>
+                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+                  <div class="px-6 pb-4">
+                    {paa.answerSnippet && (
+                      <p class="text-gray-600 text-sm leading-relaxed mb-3">{paa.answerSnippet}</p>
+                    )}
+                    <div class="flex items-center gap-4 text-xs text-gray-400">
+                      {paa.sourceDomain && (
+                        <span>Source: {paa.sourceDomain}</span>
+                      )}
+                      <a href={`/costs/${slug}/`} class="text-brand-600 hover:text-brand-700 font-medium">
+                        See our data-backed answer &rarr;
+                      </a>
+                    </div>
+                  </div>
+                </details>
+              ))}
+            </div>
           </div>
         )}
 

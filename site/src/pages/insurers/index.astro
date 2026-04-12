@@ -1,6 +1,6 @@
 ---
 import Base from '@/layouts/Base.astro';
-import { getInsurers, formatCurrencyFull } from '@/lib/api';
+import { getInsurers, formatCurrencyFull, slugify } from '@/lib/api';
 
 const data = await getInsurers(100);
 const payers = data?.payers || [];
@@ -96,7 +96,7 @@ const schema = {
           return (
             <div class="flex items-center gap-4">
               <div class="w-40 md:w-56 text-sm font-medium text-gray-900 text-right flex-shrink-0 truncate" title={p.payerName}>
-                {p.payerName}
+                <a href={`/insurers/${slugify(p.payerName)}/`} class="hover:text-indigo-600">{p.payerName}</a>
               </div>
               <div class="flex-1 relative">
                 <div class={`${color} h-9 rounded-r-lg flex items-center justify-end pr-3 transition-all`} style={`width: ${widthPct}%`}>
@@ -132,7 +132,7 @@ const schema = {
               <div class="flex items-center gap-3">
                 <span class="w-8 h-8 rounded-full bg-green-100 text-green-700 text-sm font-bold flex items-center justify-center">{i + 1}</span>
                 <div>
-                  <div class="font-semibold text-gray-900">{p.payerName}</div>
+                  <div class="font-semibold text-gray-900"><a href={`/insurers/${slugify(p.payerName)}/`} class="hover:text-indigo-600">{p.payerName}</a></div>
                   <div class="text-xs text-gray-500">{p.totalRates} rates from {p.hospitalCount} hospitals</div>
                 </div>
               </div>
@@ -156,7 +156,7 @@ const schema = {
               <div class="flex items-center gap-3">
                 <span class="w-8 h-8 rounded-full bg-red-100 text-red-700 text-sm font-bold flex items-center justify-center">{i + 1}</span>
                 <div>
-                  <div class="font-semibold text-gray-900">{p.payerName}</div>
+                  <div class="font-semibold text-gray-900"><a href={`/insurers/${slugify(p.payerName)}/`} class="hover:text-indigo-600">{p.payerName}</a></div>
                   <div class="text-xs text-gray-500">{p.totalRates} rates from {p.hospitalCount} hospitals</div>
                 </div>
               </div>
@@ -192,7 +192,7 @@ const schema = {
         <tbody>
           {payersWithMultiplier.map(p => (
               <tr class="border-b border-gray-100 hover:bg-gray-50">
-                <td class="py-3 pr-4 font-medium text-gray-900">{p.payerName}</td>
+                <td class="py-3 pr-4 font-medium text-gray-900"><a href={`/insurers/${slugify(p.payerName)}/`} class="hover:text-indigo-600">{p.payerName}</a></td>
                 <td class="py-3 pr-4 text-right text-gray-500">{p.totalRates.toLocaleString()}</td>
                 <td class="py-3 pr-4 text-right text-gray-500">{p.proceduresCovered}</td>
                 <td class="py-3 pr-4 text-right text-gray-500">{p.hospitalCount}</td>

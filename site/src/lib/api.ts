@@ -118,6 +118,23 @@ export async function getConsumerDescription(code: string): Promise<ConsumerDesc
   return fetchApi<ConsumerDescription>(`/procedures/${code}/consumer`);
 }
 
+// People Also Ask
+export interface PaaQuestion {
+  id: string;
+  procedureCode: string;
+  query: string;
+  question: string;
+  answerSnippet: string | null;
+  sourceUrl: string | null;
+  sourceDomain: string | null;
+  position: number;
+}
+
+export async function getPaaQuestions(code: string): Promise<PaaQuestion[]> {
+  const data = await fetchApi<PaaQuestion[]>(`/paa/${code}`);
+  return data || [];
+}
+
 export async function getRelatedProcedures(code: string): Promise<Array<{
   code: string;
   description: string;
@@ -526,6 +543,58 @@ export interface InsurersResponse {
 
 export async function getInsurers(limit = 50): Promise<InsurersResponse | null> {
   return fetchApi<InsurersResponse>(`/insurers?limit=${limit}`);
+}
+
+// Hospital profile
+export interface HospitalProfile {
+  hospital: { ccn: string; name: string; city: string; state: string; zip: string };
+  summary: {
+    totalDrgs: number; totalDischarges: number; avgCharges: number;
+    avgPayments: number; avgMedicare: number; chargeToPaymentRatio: number | null;
+  };
+  stateAverage: {
+    avgCharges: number; avgPayments: number; avgMedicare: number;
+    avgMarkup: number; totalHospitals: number;
+  } | null;
+  drgs: Array<{
+    drgCode: string; drgDescription: string; totalDischarges: number;
+    avgCoveredCharges: number; avgTotalPayments: number; avgMedicarePayments: number;
+    chargeToPaymentRatio: number | null;
+  }>;
+  negotiatedRates: {
+    totalRates: number; totalPayers: number;
+    byPayer: Array<{
+      payerName: string; totalRates: number; avgRate: number;
+      minRate: number; maxRate: number; proceduresCovered: number;
+    }>;
+  };
+}
+
+export async function getHospitalProfile(ccn: string): Promise<HospitalProfile | null> {
+  return fetchApi<HospitalProfile>(`/hospitals/profile/${encodeURIComponent(ccn)}`);
+}
+
+// Insurer detail
+export interface InsurerDetail {
+  payerName: string;
+  summary: {
+    totalRates: number; avgRate: number; minRate: number; maxRate: number;
+    hospitalCount: number; proceduresCovered: number; stateCount: number;
+  };
+  byProcedure: Array<{
+    code: string; description: string; totalRates: number;
+    avgRate: number; minRate: number; maxRate: number;
+  }>;
+  byHospital: Array<{
+    hospitalName: string; hospitalState: string; totalRates: number;
+    avgRate: number; minRate: number; maxRate: number; proceduresCovered: number;
+  }>;
+  medicareBaseline: { avgMedicarePayment: number } | null;
+  overallAvgRate: number;
+}
+
+export async function getInsurerDetail(payerSlug: string): Promise<InsurerDetail | null> {
+  return fetchApi<InsurerDetail>(`/insurers/${encodeURIComponent(payerSlug)}`);
 }
 
 // Drug comparison

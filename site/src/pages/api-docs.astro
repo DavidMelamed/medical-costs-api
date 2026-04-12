@@ -1,0 +1,165 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const title = 'API Documentation — MedicalCosts.info';
+const description = 'Complete API reference for the Medical Costs API. 30+ endpoints for procedure costs, drug prices, hospital data, injury estimates, and more.';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "name": title,
+  "description": description,
+  "url": "https://medical-costs-site.pages.dev/api-docs/"
+};
+
+const API_BASE = 'https://medical-costs-api.david-568.workers.dev';
+
+interface Endpoint {
+  method: string;
+  path: string;
+  summary: string;
+  params?: string;
+  example?: string;
+  tag: string;
+}
+
+const endpoints: Endpoint[] = [
+  // Procedures
+  { method: 'GET', path: '/api/procedures', summary: 'List medical procedures with optional search, category, and body system filters.', params: 'search, category, bodySystem, limit, offset', example: '/api/procedures?search=knee&limit=10', tag: 'Procedures' },
+  { method: 'GET', path: '/api/procedures/{code}', summary: 'Get full procedure details including RVUs, rates, and geographic data.', params: 'code (path)', example: '/api/procedures/99285', tag: 'Procedures' },
+  { method: 'GET', path: '/api/procedures/by-slug/{slug}', summary: 'Look up procedure by URL slug.', params: 'slug (path)', example: '/api/procedures/by-slug/er-visit-high-severity', tag: 'Procedures' },
+  { method: 'GET', path: '/api/procedures/{code}/consumer', summary: 'Get consumer-friendly procedure description.', params: 'code (path)', example: '/api/procedures/99285/consumer', tag: 'Procedures' },
+  { method: 'GET', path: '/api/related/{code}', summary: 'Get related procedures in the same category.', params: 'code (path)', example: '/api/related/99285', tag: 'Procedures' },
+  { method: 'GET', path: '/api/alternatives/{code}', summary: 'Get alternative treatment options with cost comparison.', params: 'code (path)', example: '/api/alternatives/27447', tag: 'Procedures' },
+  { method: 'GET', path: '/api/categories', summary: 'List all procedure categories with counts.', tag: 'Procedures' },
+  { method: 'GET', path: '/api/body-systems', summary: 'List body systems with procedure counts.', tag: 'Procedures' },
+  { method: 'GET', path: '/api/body-systems/{slug}', summary: 'Get body system detail with its procedures.', params: 'slug (path), limit, offset', example: '/api/body-systems/musculoskeletal', tag: 'Procedures' },
+  // Injuries
+  { method: 'GET', path: '/api/injuries', summary: 'List injury categories. Filter by crash relevance or body region.', params: 'relevance, bodyRegion', example: '/api/injuries?relevance=MOTOR_VEHICLE', tag: 'Injuries' },
+  { method: 'GET', path: '/api/injuries/{slug}', summary: 'Get injury category detail with mapped procedures.', params: 'slug (path)', example: '/api/injuries/traumatic-brain-injury', tag: 'Injuries' },
+  { method: 'GET', path: '/api/injuries/{slug}/estimate', summary: 'Get cost estimate for an injury by severity and state.', params: 'slug (path), severity, state', example: '/api/injuries/whiplash/estimate?severity=moderate&state=CO', tag: 'Injuries' },
+  { method: 'GET', path: '/api/crash-estimate', summary: 'Get crash severity cost estimate (NHTSA-based).', params: 'severity, state', example: '/api/crash-estimate?severity=SERIOUS_INJURY', tag: 'Injuries' },
+  { method: 'GET', path: '/api/settlement-estimate', summary: 'Estimate personal injury settlement range.', params: 'injury (required), severity, state', example: '/api/settlement-estimate?injury=whiplash&severity=moderate', tag: 'Injuries' },
+  // Hospital
+  { method: 'GET', path: '/api/drg', summary: 'List DRG (hospital stay) codes with average costs.', params: 'search, type (SURG/MED), limit, offset', example: '/api/drg?search=knee&type=SURG', tag: 'Hospital' },
+  { method: 'GET', path: '/api/drg/{code}', summary: 'Get DRG detail with hospital-level cost breakdown.', params: 'code (path)', example: '/api/drg/470', tag: 'Hospital' },
+  { method: 'GET', path: '/api/hospitals', summary: 'Search hospitals with cost and payment data.', params: 'state, drg, provider, search, sort, limit, offset', example: '/api/hospitals?state=CO&drg=470', tag: 'Hospital' },
+  { method: 'GET', path: '/api/hospitals/rankings', summary: 'Get hospital cost rankings nationally.', params: 'metric, direction, limit', example: '/api/hospitals/rankings?metric=charges&limit=10', tag: 'Hospital' },
+  { method: 'GET', path: '/api/hospitals/states', summary: 'List states with hospital data counts.', tag: 'Hospital' },
+  { method: 'GET', path: '/api/hospitals/{state}/drgs', summary: 'Get top DRGs for a state.', params: 'state (path), limit', example: '/api/hospitals/CO/drgs', tag: 'Hospital' },
+  // Drugs
+  { method: 'GET', path: '/api/drugs/compare', summary: 'Compare brand vs generic drug prices.', params: 'brand (required)', example: '/api/drugs/compare?brand=ozempic', tag: 'Drugs' },
+  { method: 'GET', path: '/api/drugs/categories', summary: 'List drug therapeutic categories.', tag: 'Drugs' },
+  { method: 'GET', path: '/api/drugs/glp1', summary: 'Get GLP-1 drug prices (Ozempic, Wegovy, etc.).', tag: 'Drugs' },
+  { method: 'GET', path: '/api/medications/{conditionSlug}', summary: 'Get medications commonly used for a condition.', params: 'conditionSlug (path)', example: '/api/medications/type-2-diabetes', tag: 'Drugs' },
+  // Insurance
+  { method: 'GET', path: '/api/insurers', summary: 'List insurance companies with payment data.', params: 'limit', tag: 'Insurance' },
+  { method: 'GET', path: '/api/insurance-plans', summary: 'Search ACA marketplace insurance plans.', params: 'state, metal, search, limit, offset', example: '/api/insurance-plans?state=CO&metal=silver', tag: 'Insurance' },
+  { method: 'GET', path: '/api/oop-calculator', summary: 'Calculate out-of-pocket costs based on insurance parameters.', params: 'codes (required), deductible, deductible_met, coinsurance, oop_max, copay, setting, state, plan_id', example: '/api/oop-calculator?codes=99285,27447&deductible=2000&coinsurance=0.2', tag: 'Insurance' },
+  { method: 'GET', path: '/api/auto-insurance/{state}', summary: 'Get auto insurance requirements by state.', params: 'state (path)', example: '/api/auto-insurance/CO', tag: 'Insurance' },
+  // Geographic & Transparency
+  { method: 'GET', path: '/api/compare', summary: 'Compare procedure costs across states.', params: 'code (required), states', example: '/api/compare?code=99285&states=CO,CA,TX,NY', tag: 'Geographic' },
+  { method: 'GET', path: '/api/negotiated-rates', summary: 'Get negotiated rates from payers.', params: 'code (required), state, payer, setting, limit', example: '/api/negotiated-rates?code=99285', tag: 'Transparency' },
+  { method: 'GET', path: '/api/bill-check', summary: 'Check if a medical bill is reasonable.', params: 'code (required), amount (required), state', example: '/api/bill-check?code=99285&amount=2500&state=CO', tag: 'Transparency' },
+  // Search & Meta
+  { method: 'GET', path: '/api/search', summary: 'Unified search across procedures, conditions, and drugs.', params: 'q (required), limit', example: '/api/search?q=mri&limit=10', tag: 'Search' },
+  { method: 'GET', path: '/api/graph/{type}/{id}', summary: 'Get knowledge graph relationships.', params: 'type (path), id (path), relationship, limit', example: '/api/graph/procedure/99285', tag: 'Search' },
+  { method: 'GET', path: '/api/statistics', summary: 'Get database statistics and counts.', tag: 'Meta' },
+  { method: 'GET', path: '/api/metrics', summary: 'Get key platform metrics.', tag: 'Meta' },
+  { method: 'GET', path: '/api/metrics/facts', summary: 'Get interesting medical cost facts.', tag: 'Meta' },
+  { method: 'GET', path: '/api/trends', summary: 'Get medical cost trends over time.', tag: 'Meta' },
+  { method: 'GET', path: '/api/og', summary: 'Generate dynamic OG image (SVG, 1200x630).', params: 'title, price, type', example: '/api/og?title=MRI+Cost&price=$85&type=procedure', tag: 'Meta' },
+  { method: 'GET', path: '/api/embed/{code}', summary: 'Get embeddable HTML widget for a procedure.', params: 'code (path)', example: '/api/embed/99285', tag: 'Meta' },
+];
+
+const tags = ['Procedures', 'Injuries', 'Hospital', 'Drugs', 'Insurance', 'Geographic', 'Transparency', 'Search', 'Meta'];
+---
+
+<Base title={title} description={description} canonical="/api-docs/" schema={schema}>
+  <div class="max-w-5xl mx-auto px-4 py-12">
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">API Documentation</h1>
+    <p class="text-lg text-gray-600 mb-2">
+      The Medical Costs API provides free, open access to medical procedure costs, drug prices, hospital data, and more.
+    </p>
+    <p class="text-sm text-gray-500 mb-8">
+      Base URL: <code class="bg-gray-100 px-2 py-0.5 rounded text-blue-700 font-mono text-xs">{API_BASE}</code>
+      &nbsp;&bull;&nbsp;
+      <a href="/api-docs/openapi.yaml" class="text-blue-600 hover:underline">Download OpenAPI Spec (YAML)</a>
+    </p>
+
+    <!-- Response format -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+      <h3 class="font-semibold text-blue-800 mb-1">Response Format</h3>
+      <p class="text-sm text-blue-700 mb-2">All endpoints return JSON:</p>
+      <pre class="bg-blue-100 rounded p-3 text-xs font-mono text-blue-900 overflow-x-auto">{"{"} "success": true, "data": {"{"} ... {"}"} {"}"}</pre>
+    </div>
+
+    <!-- Table of contents -->
+    <nav class="mb-12 bg-gray-50 rounded-lg p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-3">Sections</h2>
+      <div class="grid sm:grid-cols-3 gap-2">
+        {tags.map(tag => {
+          const count = endpoints.filter(e => e.tag === tag).length;
+          return (
+            <a href={`#${tag.toLowerCase()}`} class="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-900 hover:underline">
+              <span class="bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 text-xs font-mono">{count}</span>
+              {tag}
+            </a>
+          );
+        })}
+      </div>
+    </nav>
+
+    <!-- Endpoints by tag -->
+    {tags.map(tag => (
+      <section id={tag.toLowerCase()} class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4 border-b pb-2">{tag}</h2>
+        <div class="space-y-4">
+          {endpoints.filter(e => e.tag === tag).map(ep => (
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+              <div class="flex items-center gap-3 px-4 py-3 bg-gray-50">
+                <span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-0.5 rounded uppercase">{ep.method}</span>
+                <code class="text-sm font-mono text-gray-800 font-medium">{ep.path}</code>
+              </div>
+              <div class="px-4 py-3">
+                <p class="text-sm text-gray-700 mb-2">{ep.summary}</p>
+                {ep.params && (
+                  <div class="mb-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase">Parameters: </span>
+                    <span class="text-xs text-gray-600 font-mono">{ep.params}</span>
+                  </div>
+                )}
+                {ep.example && (
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-500 uppercase">Try: </span>
+                    <a
+                      href={`${API_BASE}${ep.example}`}
+                      target="_blank"
+                      rel="noopener"
+                      class="text-xs font-mono text-blue-600 hover:underline break-all"
+                    >
+                      {API_BASE}{ep.example}
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    <!-- Rate limits & disclaimer -->
+    <section class="mt-16 bg-gray-50 rounded-lg p-6">
+      <h2 class="text-lg font-semibold text-gray-900 mb-2">Usage Notes</h2>
+      <ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">
+        <li>All data is based on publicly available CMS Medicare fee schedules (CY 2026, CF $33.40)</li>
+        <li>Commercial rates are estimated at 150-250% of Medicare rates</li>
+        <li>No API key required &mdash; free and open access</li>
+        <li>CORS is enabled for allowed origins</li>
+        <li>Rate limiting may apply; please be respectful with request volumes</li>
+        <li>Data is for informational purposes only and is not medical or financial advice</li>
+      </ul>
+    </section>
+  </div>
+</Base>

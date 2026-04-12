@@ -90,6 +90,7 @@ export default {
       if (path === "/api/hospitals") return handleHospitals(url, env, cors);
       if (path === "/api/hospitals/rankings") return handleHospitalRankings(url, env, cors);
       if (path === "/api/hospitals/states") return handleHospitalStates(env, cors);
+      if (path === "/api/hospitals/best") return handleBestHospitals(url, env, cors);
       if (path === "/api/insurers") return handleInsurers(url, env, cors);
       if (path === "/api/trends") return handleTrends(env, cors);
       if (path === "/api/negotiated-rates") return handleNegotiatedRates(url, env, cors);
@@ -99,6 +100,11 @@ export default {
       if (path === "/api/drugs/glp1") return handleGlp1Drugs(env, cors);
       if (path === "/api/insurance-plans") return handleInsurancePlans(url, env, cors);
       if (path === "/api/oop-calculator") return handleOopCalculator(url, env, cors);
+      if (path === "/api/og") return handleOgImage(url, cors);
+
+      // Embed HTML snippet
+      const embedMatch = path.match(/^\/api\/embed\/([^/]+)$/);
+      if (embedMatch) return handleEmbed(decodeURIComponent(embedMatch[1]), env, cors);
 
       // Auto insurance by state
       const autoInsMatch = path.match(/^\/api\/auto-insurance\/([a-zA-Z]{2})$/);
@@ -129,6 +135,9 @@ export default {
       const relatedMatch = path.match(/^\/api\/related\/([^/]+)$/);
       if (relatedMatch) return handleRelatedProcedures(decodeURIComponent(relatedMatch[1]), env, cors);
 
+      const paaMatch = path.match(/^\/api\/paa\/([^/]+)$/);
+      if (paaMatch) return handlePaa(decodeURIComponent(paaMatch[1]), env, cors);
+
       const consumerMatch = path.match(/^\/api\/procedures\/([^/]+)\/consumer$/);
       if (consumerMatch) return handleConsumerDescription(decodeURIComponent(consumerMatch[1]), env, cors);
 
@@ -140,6 +149,18 @@ export default {
 
       const injuryMatch = path.match(/^\/api\/injuries\/([^/]+)$/);
       if (injuryMatch) return handleInjuryDetail(decodeURIComponent(injuryMatch[1]), env, cors);
+
+      // Hospital quality by provider ID
+      const hospitalQualityMatch = path.match(/^\/api\/hospitals\/([^/]+)\/quality$/);
+      if (hospitalQualityMatch) return handleHospitalQuality(decodeURIComponent(hospitalQualityMatch[1]), env, cors);
+
+      // Hospital profile by CCN
+      const hospitalProfileMatch = path.match(/^\/api\/hospitals\/profile\/([^/]+)$/);
+      if (hospitalProfileMatch) return handleHospitalProfile(decodeURIComponent(hospitalProfileMatch[1]), env, cors);
+
+      // Insurer detail by payer name
+      const insurerDetailMatch = path.match(/^\/api\/insurers\/([^/]+)$/);
+      if (insurerDetailMatch) return handleInsurerDetail(decodeURIComponent(insurerDetailMatch[1]), env, cors);
 
       // Hospital state DRGs
       const hospitalStateDrgsMatch = path.match(/^\/api\/hospitals\/([A-Z]{2})\/drgs$/);
@@ -188,13 +209,17 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/hospitals/rankings?metric=charges&limit=10",
         "GET /api/hospitals/states",
         "GET /api/hospitals/:state/drgs",
+        "GET /api/hospitals/profile/:ccn",
         "GET /api/insurers",
+        "GET /api/insurers/:payerName",
         "GET /api/trends",
         "GET /api/negotiated-rates?code=99285",
         "GET /api/bill-check?code=99285&amount=2500&state=CO",
         "GET /api/drugs/compare?brand=ozempic",
         "GET /api/drugs/categories",
         "GET /api/drugs/glp1",
+        "GET /api/og?title=MRI+Cost&price=$85&type=procedure",
+        "GET /api/embed/:code",
       ],
     },
     cors,
@@ -326,6 +351,27 @@ async function handleProcedureDetail(code: string, env: Env, cors: Record<string
 // ---------------------------------------------------------------------------
 // GET /api/procedures/:code/consumer
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// People Also Ask (PAA) — harvested from Google SERP
+// ---------------------------------------------------------------------------
+async function handlePaa(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, procedure_code AS procedureCode, query, question,
+            answer_snippet AS answerSnippet, source_url AS sourceUrl,
+            source_domain AS sourceDomain, position
+     FROM people_also_ask
+     WHERE procedure_code = ?1
+     ORDER BY position ASC
+     LIMIT 20`,
+  ).bind(code).all();
+
+  if (!results || results.length === 0) {
+    return success([], cors);
+  }
+
+  return success(results, cors);
+}
 
 async function handleConsumerDescription(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
   // Try to get consumer description
@@ -1404,22 +1450,22 @@ async function handleHospitals(url: URL, env: Env, cors: Record<string, string>)
   let paramIdx = 1;
 
   if (state) {
-    conditions.push(`provider_state = ?${paramIdx}`);
+    conditions.push(`h.provider_state = ?${paramIdx}`);
     params.push(state.toUpperCase());
     paramIdx++;
   }
   if (drg) {
-    conditions.push(`drg_code = ?${paramIdx}`);
+    conditions.push(`h.drg_code = ?${paramIdx}`);
     params.push(drg);
     paramIdx++;
   }
   if (provider) {
-    conditions.push(`provider_ccn = ?${paramIdx}`);
+    conditions.push(`h.provider_ccn = ?${paramIdx}`);
     params.push(provider);
     paramIdx++;
   }
   if (search) {
-    conditions.push(`(provider_name LIKE ?${paramIdx} OR drg_description LIKE ?${paramIdx})`);
+    conditions.push(`(h.provider_name LIKE ?${paramIdx} OR h.drg_description LIKE ?${paramIdx})`);
     params.push(`%${search}%`);
     paramIdx++;
   }
@@ -1427,36 +1473,39 @@ async function handleHospitals(url: URL, env: Env, cors: Record<string, string>)
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const orderMap: Record<string, string> = {
-    charges_desc: "avg_covered_charges DESC",
-    charges_asc: "avg_covered_charges ASC",
-    payments_desc: "avg_total_payments DESC",
-    payments_asc: "avg_total_payments ASC",
-    markup_desc: "CASE WHEN avg_total_payments > 0 THEN avg_covered_charges / avg_total_payments ELSE 0 END DESC",
-    discharges_desc: "total_discharges DESC",
-    name_asc: "provider_name ASC",
+    charges_desc: "h.avg_covered_charges DESC",
+    charges_asc: "h.avg_covered_charges ASC",
+    payments_desc: "h.avg_total_payments DESC",
+    payments_asc: "h.avg_total_payments ASC",
+    markup_desc: "CASE WHEN h.avg_total_payments > 0 THEN h.avg_covered_charges / h.avg_total_payments ELSE 0 END DESC",
+    discharges_desc: "h.total_discharges DESC",
+    name_asc: "h.provider_name ASC",
+    rating_desc: "hq.overall_rating DESC",
   };
-  const orderBy = orderMap[sort] || "avg_covered_charges DESC";
+  const orderBy = orderMap[sort] || "h.avg_covered_charges DESC";
 
-  const countStmt = env.DB.prepare(`SELECT COUNT(*) as total FROM hospital_drg_costs ${where}`).bind(...params);
+  const countStmt = env.DB.prepare(`SELECT COUNT(*) as total FROM hospital_drg_costs h ${where}`).bind(...params);
   const countResult = await countStmt.first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
   const dataStmt = env.DB.prepare(
     `SELECT
-       provider_ccn AS providerCcn,
-       provider_name AS providerName,
-       provider_city AS providerCity,
-       provider_state AS providerState,
-       provider_zip AS providerZip,
-       drg_code AS drgCode,
-       drg_description AS drgDescription,
-       total_discharges AS totalDischarges,
-       avg_covered_charges AS avgCoveredCharges,
-       avg_total_payments AS avgTotalPayments,
-       avg_medicare_payments AS avgMedicarePayments,
-       CASE WHEN avg_total_payments > 0 THEN ROUND(avg_covered_charges / avg_total_payments, 2) ELSE NULL END AS chargeToPaymentRatio,
-       year
-     FROM hospital_drg_costs
+       h.provider_ccn AS providerCcn,
+       h.provider_name AS providerName,
+       h.provider_city AS providerCity,
+       h.provider_state AS providerState,
+       h.provider_zip AS providerZip,
+       h.drg_code AS drgCode,
+       h.drg_description AS drgDescription,
+       h.total_discharges AS totalDischarges,
+       h.avg_covered_charges AS avgCoveredCharges,
+       h.avg_total_payments AS avgTotalPayments,
+       h.avg_medicare_payments AS avgMedicarePayments,
+       CASE WHEN h.avg_total_payments > 0 THEN ROUND(h.avg_covered_charges / h.avg_total_payments, 2) ELSE NULL END AS chargeToPaymentRatio,
+       h.year,
+       hq.overall_rating AS qualityRating
+     FROM hospital_drg_costs h
+     LEFT JOIN hospital_quality hq ON h.provider_ccn = hq.provider_id
      ${where}
      ORDER BY ${orderBy}
      LIMIT ?${paramIdx} OFFSET ?${paramIdx + 1}`,
@@ -1642,6 +1691,389 @@ async function handleInsurers(url: URL, env: Env, cors: Record<string, string>):
     payers,
     summary: stats,
     medicareBaseline,
+    disclaimer: "Insurance rates shown are from hospital Machine-Readable Files (MRFs). Rates vary by plan, network tier, and specific contract terms."
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals/profile/:ccn — Hospital profile with all DRGs + negotiated rates
+// ---------------------------------------------------------------------------
+
+async function handleHospitalProfile(ccn: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results: drgs } = await env.DB.prepare(`
+    SELECT
+      provider_ccn AS providerCcn,
+      provider_name AS providerName,
+      provider_city AS providerCity,
+      provider_state AS providerState,
+      provider_zip AS providerZip,
+      drg_code AS drgCode,
+      drg_description AS drgDescription,
+      total_discharges AS totalDischarges,
+      avg_covered_charges AS avgCoveredCharges,
+      avg_total_payments AS avgTotalPayments,
+      avg_medicare_payments AS avgMedicarePayments,
+      CASE WHEN avg_total_payments > 0 THEN ROUND(avg_covered_charges / avg_total_payments, 2) ELSE NULL END AS chargeToPaymentRatio,
+      year
+    FROM hospital_drg_costs
+    WHERE provider_ccn = ?1
+    ORDER BY total_discharges DESC
+  `).bind(ccn).all();
+
+  if (!drgs || drgs.length === 0) {
+    return error("Hospital not found", 404, cors);
+  }
+
+  const hospital = {
+    ccn,
+    name: (drgs[0] as any).providerName,
+    city: (drgs[0] as any).providerCity,
+    state: (drgs[0] as any).providerState,
+    zip: (drgs[0] as any).providerZip,
+  };
+
+  const totalDrgs = drgs.length;
+  const totalDischarges = drgs.reduce((s: number, d: any) => s + (d.totalDischarges || 0), 0);
+  const avgCharges = Math.round(drgs.reduce((s: number, d: any) => s + (d.avgCoveredCharges || 0), 0) / totalDrgs);
+  const avgPayments = Math.round(drgs.reduce((s: number, d: any) => s + (d.avgTotalPayments || 0), 0) / totalDrgs);
+  const avgMedicare = Math.round(drgs.reduce((s: number, d: any) => s + (d.avgMedicarePayments || 0), 0) / totalDrgs);
+  const chargeToPaymentRatio = avgPayments > 0 ? Math.round((avgCharges / avgPayments) * 100) / 100 : null;
+
+  const stateAvg = await env.DB.prepare(`
+    SELECT
+      ROUND(AVG(avg_covered_charges), 2) AS avgCharges,
+      ROUND(AVG(avg_total_payments), 2) AS avgPayments,
+      ROUND(AVG(avg_medicare_payments), 2) AS avgMedicare,
+      ROUND(AVG(CASE WHEN avg_total_payments > 0 THEN avg_covered_charges / avg_total_payments ELSE NULL END), 2) AS avgMarkup,
+      COUNT(DISTINCT provider_ccn) AS totalHospitals
+    FROM hospital_drg_costs
+    WHERE provider_state = ?1
+  `).bind(hospital.state).first();
+
+  const { results: negotiatedRates } = await env.DB.prepare(`
+    SELECT
+      payer_name AS payerName,
+      code,
+      code_type AS codeType,
+      description,
+      plan_name AS planName,
+      negotiated_rate AS negotiatedRate,
+      methodology,
+      setting
+    FROM hospital_negotiated_rates
+    WHERE hospital_name LIKE ?1
+    ORDER BY payer_name, negotiated_rate ASC
+    LIMIT 500
+  `).bind(`%${hospital.name}%`).all();
+
+  const payerMap = new Map<string, { rates: number; sum: number; min: number; max: number; procedures: Set<string> }>();
+  for (const r of negotiatedRates as any[]) {
+    const existing = payerMap.get(r.payerName);
+    if (existing) {
+      existing.rates++;
+      existing.sum += r.negotiatedRate;
+      existing.min = Math.min(existing.min, r.negotiatedRate);
+      existing.max = Math.max(existing.max, r.negotiatedRate);
+      existing.procedures.add(r.code);
+    } else {
+      payerMap.set(r.payerName, {
+        rates: 1, sum: r.negotiatedRate, min: r.negotiatedRate, max: r.negotiatedRate,
+        procedures: new Set([r.code]),
+      });
+    }
+  }
+
+  const payerSummary = Array.from(payerMap.entries()).map(([name, data]) => ({
+    payerName: name,
+    totalRates: data.rates,
+    avgRate: Math.round(data.sum / data.rates),
+    minRate: data.min,
+    maxRate: data.max,
+    proceduresCovered: data.procedures.size,
+  })).sort((a, b) => b.totalRates - a.totalRates);
+
+  // Fetch quality data from hospital_quality table
+  const quality = await env.DB.prepare(`
+    SELECT
+      provider_id AS providerId,
+      hospital_name AS hospitalName,
+      overall_rating AS overallRating,
+      patient_experience_rating AS patientExperienceRating,
+      readmission_rating AS readmissionRating,
+      mortality_rating AS mortalityRating,
+      safety_rating AS safetyRating,
+      timeliness_rating AS timelinessRating,
+      effectiveness_rating AS effectivenessRating,
+      hospital_type AS hospitalType,
+      ownership,
+      emergency_services AS emergencyServices
+    FROM hospital_quality
+    WHERE provider_id = ?1
+  `).bind(ccn).first();
+
+  // Get state quality averages
+  const stateQualityAvg = await env.DB.prepare(`
+    SELECT
+      ROUND(AVG(overall_rating), 2) AS avgRating,
+      COUNT(*) AS totalHospitals,
+      SUM(CASE WHEN overall_rating = 5 THEN 1 ELSE 0 END) AS fiveStarCount,
+      SUM(CASE WHEN overall_rating >= 4 THEN 1 ELSE 0 END) AS fourPlusCount
+    FROM hospital_quality
+    WHERE state = ?1 AND overall_rating IS NOT NULL
+  `).bind(hospital.state).first();
+
+  return success({
+    hospital,
+    summary: { totalDrgs, totalDischarges, avgCharges, avgPayments, avgMedicare, chargeToPaymentRatio },
+    quality: quality || null,
+    stateAverage: stateAvg,
+    stateQualityAverage: stateQualityAvg || null,
+    drgs,
+    negotiatedRates: {
+      totalRates: negotiatedRates.length,
+      totalPayers: payerMap.size,
+      byPayer: payerSummary,
+      rates: negotiatedRates,
+    },
+    disclaimer: "Hospital charges reflect list prices. Actual patient costs depend on insurance, deductibles, and negotiated rates.",
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals/:providerId/quality — Quality metrics for a hospital
+// ---------------------------------------------------------------------------
+
+async function handleHospitalQuality(providerId: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const quality = await env.DB.prepare(`
+    SELECT
+      provider_id AS providerId,
+      hospital_name AS hospitalName,
+      city,
+      state,
+      zip,
+      overall_rating AS overallRating,
+      patient_experience_rating AS patientExperienceRating,
+      readmission_rating AS readmissionRating,
+      mortality_rating AS mortalityRating,
+      safety_rating AS safetyRating,
+      timeliness_rating AS timelinessRating,
+      effectiveness_rating AS effectivenessRating,
+      hospital_type AS hospitalType,
+      ownership,
+      emergency_services AS emergencyServices
+    FROM hospital_quality
+    WHERE provider_id = ?1
+  `).bind(providerId).first();
+
+  if (!quality) {
+    return error("Hospital quality data not found", 404, cors);
+  }
+
+  const stateAvg = await env.DB.prepare(`
+    SELECT
+      ROUND(AVG(overall_rating), 2) AS avgRating,
+      COUNT(*) AS totalRatedHospitals,
+      SUM(CASE WHEN overall_rating = 5 THEN 1 ELSE 0 END) AS fiveStarCount,
+      SUM(CASE WHEN overall_rating = 1 THEN 1 ELSE 0 END) AS oneStarCount
+    FROM hospital_quality
+    WHERE state = ?1 AND overall_rating IS NOT NULL
+  `).bind((quality as any).state).first();
+
+  const nationalAvg = await env.DB.prepare(`
+    SELECT
+      ROUND(AVG(overall_rating), 2) AS avgRating,
+      COUNT(*) AS totalRatedHospitals,
+      SUM(CASE WHEN overall_rating = 5 THEN 1 ELSE 0 END) AS fiveStarCount
+    FROM hospital_quality
+    WHERE overall_rating IS NOT NULL
+  `).first();
+
+  return success({
+    quality,
+    stateAverage: stateAvg,
+    nationalAverage: nationalAvg,
+    source: "CMS Hospital Compare",
+    disclaimer: "Star ratings are based on CMS Hospital Compare data. Ratings reflect performance on measures of mortality, safety, readmission, patient experience, and timeliness.",
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals/best — Find top-rated hospitals by state
+// ---------------------------------------------------------------------------
+
+async function handleBestHospitals(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const state = url.searchParams.get("state")?.toUpperCase();
+  const minRating = parseInt(url.searchParams.get("rating") || "4", 10);
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
+
+  const conditions: string[] = ["overall_rating >= ?1"];
+  const params: unknown[] = [minRating];
+  let paramIdx = 2;
+
+  if (state) {
+    conditions.push(`state = ?${paramIdx}`);
+    params.push(state);
+    paramIdx++;
+  }
+
+  const where = conditions.join(" AND ");
+
+  const { results } = await env.DB.prepare(`
+    SELECT
+      hq.provider_id AS providerId,
+      hq.hospital_name AS hospitalName,
+      hq.city,
+      hq.state,
+      hq.zip,
+      hq.overall_rating AS overallRating,
+      hq.mortality_rating AS mortalityRating,
+      hq.safety_rating AS safetyRating,
+      hq.readmission_rating AS readmissionRating,
+      hq.patient_experience_rating AS patientExperienceRating,
+      hq.hospital_type AS hospitalType,
+      hq.ownership,
+      hq.emergency_services AS emergencyServices
+    FROM hospital_quality hq
+    WHERE ${where}
+    ORDER BY hq.overall_rating DESC, hq.hospital_name ASC
+    LIMIT ?${paramIdx}
+  `).bind(...params, limit).all();
+
+  const distConditions: string[] = [];
+  const distParams: unknown[] = [];
+  if (state) {
+    distConditions.push("state = ?1");
+    distParams.push(state);
+  }
+  const distWhere = distConditions.length ? `WHERE ${distConditions.join(" AND ")} AND overall_rating IS NOT NULL` : "WHERE overall_rating IS NOT NULL";
+
+  const { results: dist } = await env.DB.prepare(`
+    SELECT overall_rating AS rating, COUNT(*) AS count
+    FROM hospital_quality
+    ${distWhere}
+    GROUP BY overall_rating
+    ORDER BY overall_rating DESC
+  `).bind(...distParams).all();
+
+  return success({
+    hospitals: results,
+    ratingDistribution: dist,
+    filters: { state: state || "all", minRating, limit },
+    source: "CMS Hospital Compare",
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/insurers/:payerName — Insurer detail with all rates across hospitals
+// ---------------------------------------------------------------------------
+
+async function handleInsurerDetail(payerName: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const searchName = payerName.replace(/-/g, '%');
+
+  const { results: rates } = await env.DB.prepare(`
+    SELECT
+      hospital_name AS hospitalName,
+      hospital_state AS hospitalState,
+      code,
+      code_type AS codeType,
+      description,
+      payer_name AS payerName,
+      plan_name AS planName,
+      negotiated_rate AS negotiatedRate,
+      methodology,
+      setting
+    FROM hospital_negotiated_rates
+    WHERE payer_name LIKE ?1 AND negotiated_rate > 0
+    ORDER BY negotiated_rate ASC
+    LIMIT 1000
+  `).bind(`%${searchName}%`).all();
+
+  if (!rates || rates.length === 0) {
+    return error("Insurer not found", 404, cors);
+  }
+
+  const actualPayerName = (rates[0] as any).payerName;
+
+  const totalRates = rates.length;
+  const avgRate = Math.round(rates.reduce((s: number, r: any) => s + r.negotiatedRate, 0) / totalRates);
+  const minRate = Math.min(...rates.map((r: any) => r.negotiatedRate));
+  const maxRate = Math.max(...rates.map((r: any) => r.negotiatedRate));
+  const hospitalsSet = new Set(rates.map((r: any) => r.hospitalName));
+  const proceduresSet = new Set(rates.map((r: any) => r.code));
+  const statesSet = new Set(rates.map((r: any) => r.hospitalState));
+
+  const procMap = new Map<string, { desc: string; rates: number; sum: number; min: number; max: number }>();
+  for (const r of rates as any[]) {
+    const existing = procMap.get(r.code);
+    if (existing) {
+      existing.rates++;
+      existing.sum += r.negotiatedRate;
+      existing.min = Math.min(existing.min, r.negotiatedRate);
+      existing.max = Math.max(existing.max, r.negotiatedRate);
+    } else {
+      procMap.set(r.code, { desc: r.description, rates: 1, sum: r.negotiatedRate, min: r.negotiatedRate, max: r.negotiatedRate });
+    }
+  }
+
+  const byProcedure = Array.from(procMap.entries()).map(([code, data]) => ({
+    code,
+    description: data.desc,
+    totalRates: data.rates,
+    avgRate: Math.round(data.sum / data.rates),
+    minRate: data.min,
+    maxRate: data.max,
+  })).sort((a, b) => b.totalRates - a.totalRates);
+
+  const hospMap = new Map<string, { state: string; rates: number; sum: number; min: number; max: number; procs: Set<string> }>();
+  for (const r of rates as any[]) {
+    const existing = hospMap.get(r.hospitalName);
+    if (existing) {
+      existing.rates++;
+      existing.sum += r.negotiatedRate;
+      existing.min = Math.min(existing.min, r.negotiatedRate);
+      existing.max = Math.max(existing.max, r.negotiatedRate);
+      existing.procs.add(r.code);
+    } else {
+      hospMap.set(r.hospitalName, { state: r.hospitalState, rates: 1, sum: r.negotiatedRate, min: r.negotiatedRate, max: r.negotiatedRate, procs: new Set([r.code]) });
+    }
+  }
+
+  const byHospital = Array.from(hospMap.entries()).map(([name, data]) => ({
+    hospitalName: name,
+    hospitalState: data.state,
+    totalRates: data.rates,
+    avgRate: Math.round(data.sum / data.rates),
+    minRate: data.min,
+    maxRate: data.max,
+    proceduresCovered: data.procs.size,
+  })).sort((a, b) => b.totalRates - a.totalRates);
+
+  const medicareBaseline = await env.DB.prepare(`
+    SELECT ROUND(AVG(avg_medicare_payments), 2) AS avgMedicarePayment
+    FROM hospital_drg_costs
+  `).first();
+
+  const overallAvg = await env.DB.prepare(`
+    SELECT ROUND(AVG(negotiated_rate), 2) AS overallAvgRate
+    FROM hospital_negotiated_rates
+    WHERE negotiated_rate > 0
+  `).first();
+
+  return success({
+    payerName: actualPayerName,
+    summary: {
+      totalRates,
+      avgRate,
+      minRate,
+      maxRate,
+      hospitalCount: hospitalsSet.size,
+      proceduresCovered: proceduresSet.size,
+      stateCount: statesSet.size,
+    },
+    byProcedure,
+    byHospital,
+    medicareBaseline,
+    overallAvgRate: (overallAvg as any)?.overallAvgRate || 0,
     disclaimer: "Insurance rates shown are from hospital Machine-Readable Files (MRFs). Rates vary by plan, network tier, and specific contract terms."
   }, cors);
 }
@@ -2742,4 +3174,134 @@ async function handleAutoInsurance(stateCode: string, env: Env, cors: Record<str
       : (row as any).faultSystem === 'no-fault' ? 'No-Fault'
       : 'Choice (No-Fault or Tort)',
   }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/og — Dynamic OG Image (SVG)
+// ---------------------------------------------------------------------------
+
+function handleOgImage(url: URL, cors: Record<string, string>): Response {
+  const title = url.searchParams.get("title") || "Medical Cost Data";
+  const price = url.searchParams.get("price") || "";
+  const type = url.searchParams.get("type") || "procedure";
+
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const typeLabel = type === "drug" ? "Drug Price" : type === "drg" ? "Hospital Stay" : type === "condition" ? "Condition" : "Procedure Cost";
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="40" y="40" width="1120" height="550" rx="24" fill="rgba(255,255,255,0.08)"/>
+  <circle cx="100" cy="100" r="28" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="2"/>
+  <text x="106" y="108" font-family="system-ui,sans-serif" font-size="28" fill="white" text-anchor="middle">$</text>
+  <text x="150" y="108" font-family="system-ui,sans-serif" font-size="32" font-weight="bold" fill="white">MedicalCosts<tspan fill="#86efac">.info</tspan></text>
+  <rect x="80" y="160" width="${typeLabel.length * 16 + 40}" height="40" rx="20" fill="rgba(255,255,255,0.15)"/>
+  <text x="100" y="186" font-family="system-ui,sans-serif" font-size="18" fill="#93c5fd" font-weight="600" letter-spacing="1">${esc(typeLabel.toUpperCase())}</text>
+  <text x="80" y="290" font-family="system-ui,sans-serif" font-size="52" font-weight="bold" fill="white">${esc(title.length > 40 ? title.substring(0, 37) + "..." : title)}</text>
+  ${price ? `<text x="80" y="380" font-family="system-ui,sans-serif" font-size="72" font-weight="bold" fill="#86efac">${esc(price)}</text>
+  <text x="80" y="420" font-family="system-ui,sans-serif" font-size="22" fill="#93c5fd">Medicare National Rate</text>` : ""}
+  <text x="80" y="540" font-family="system-ui,sans-serif" font-size="22" fill="rgba(255,255,255,0.7)">Free Medical Cost Data &#x2022; CMS Medicare Fee Schedule 2026</text>
+  <circle cx="1050" cy="480" r="120" fill="rgba(255,255,255,0.03)"/>
+  <circle cx="1100" cy="200" r="80" fill="rgba(255,255,255,0.03)"/>
+</svg>`;
+
+  return new Response(svg, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "public, max-age=86400",
+      ...cors,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/embed/:code — Embeddable HTML snippet for a procedure
+// ---------------------------------------------------------------------------
+
+async function handleEmbed(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT mp.code, mp.description, mp.category, mp.national_facility_rate,
+            mp.national_non_fac_rate, cd.consumer_name, ps.slug
+     FROM medical_procedures mp
+     LEFT JOIN consumer_descriptions cd ON mp.code = cd.code
+     LEFT JOIN procedure_slugs ps ON mp.code = ps.code
+     WHERE mp.code = ?1 LIMIT 1`
+  ).bind(code).first();
+
+  if (!row) {
+    return new Response(
+      `<div style="padding:16px;font-family:system-ui;color:#666">Procedure not found</div>`,
+      { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", ...cors } }
+    );
+  }
+
+  const r = row as any;
+  const name = r.consumer_name || r.description;
+  const facilityRate = r.national_facility_rate ? `$${Number(r.national_facility_rate).toFixed(0)}` : "N/A";
+  const nonFacRate = r.national_non_fac_rate ? `$${Number(r.national_non_fac_rate).toFixed(0)}` : "N/A";
+  const commercialLow = r.national_facility_rate ? `$${Math.round(r.national_facility_rate * 1.5)}` : "N/A";
+  const commercialHigh = r.national_facility_rate ? `$${Math.round(r.national_facility_rate * 2.5)}` : "N/A";
+  const slug = r.slug || r.code;
+  const link = `https://medical-costs-site.pages.dev/procedures/${slug}/`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#fff;color:#1f2937}
+.widget{max-width:400px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+.header{background:linear-gradient(135deg,#1e40af,#3b82f6);padding:16px 20px;color:#fff}
+.header h2{font-size:16px;font-weight:700;margin-bottom:2px}
+.header .code{font-size:12px;opacity:0.8}
+.body{padding:16px 20px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6}
+.row:last-child{border-bottom:none}
+.label{font-size:13px;color:#6b7280}
+.value{font-size:15px;font-weight:600;color:#059669}
+.commercial{color:#d97706}
+.footer{padding:10px 20px;background:#f9fafb;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center}
+.footer a{font-size:12px;color:#2563eb;text-decoration:none;font-weight:500}
+.footer a:hover{text-decoration:underline}
+.powered{font-size:11px;color:#9ca3af}
+</style>
+</head>
+<body>
+<div class="widget">
+  <div class="header">
+    <h2>${escHtml(name)}</h2>
+    <span class="code">CPT ${escHtml(r.code)} &#x2022; ${escHtml(r.category || "Medical Procedure")}</span>
+  </div>
+  <div class="body">
+    <div class="row"><span class="label">Medicare (Facility)</span><span class="value">${facilityRate}</span></div>
+    <div class="row"><span class="label">Medicare (Office)</span><span class="value">${nonFacRate}</span></div>
+    <div class="row"><span class="label">Est. Commercial Range</span><span class="value commercial">${commercialLow} &ndash; ${commercialHigh}</span></div>
+  </div>
+  <div class="footer">
+    <a href="${link}" target="_blank" rel="noopener">View full details &rarr;</a>
+    <span class="powered">Powered by <a href="https://medical-costs-site.pages.dev" target="_blank" rel="noopener">MedicalCosts.info</a></span>
+  </div>
+</div>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+      ...cors,
+    },
+  });
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

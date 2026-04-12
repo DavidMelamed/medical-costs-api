@@ -110,7 +110,7 @@ const schema = {
             <tr class="border-b border-gray-100 hover:bg-gray-50">
               <td class="py-3 pr-4 text-gray-400 font-mono">{i + 1}</td>
               <td class="py-3 pr-4 font-medium text-gray-900">
-                <a href={`/hospitals/${h.providerState.toLowerCase()}/`} class="hover:text-teal-600">{h.providerName}</a>
+                <a href={`/hospitals/profile/${h.providerCcn}/`} class="hover:text-teal-600">{h.providerName}</a>
               </td>
               <td class="py-3 pr-4 text-gray-500">{h.providerCity}, {h.providerState}</td>
               <td class="py-3 pr-4 text-right font-semibold text-red-600">{formatCurrencyFull(h.avgCharges)}</td>
