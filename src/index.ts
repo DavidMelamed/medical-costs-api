@@ -2583,13 +2583,13 @@ async function handleOopCalculator(url: URL, env: Env, cors: Record<string, stri
   // Fetch procedures
   const placeholders = codes.map(() => "?").join(",");
   const { results: procedures } = await env.DB.prepare(
-    `SELECT code, description, category, body_system,
-            national_facility_rate, national_non_fac_rate,
-            hospital_outpatient_cost, asc_cost,
-            consumer_name
-     FROM medical_procedures
-     LEFT JOIN consumer_descriptions ON medical_procedures.code = consumer_descriptions.code
-     WHERE medical_procedures.code IN (${placeholders})`
+    `SELECT mp.code, mp.description, mp.category, mp.body_system,
+            mp.national_facility_rate, mp.national_non_fac_rate,
+            mp.hospital_outpatient_cost, mp.asc_cost,
+            cd.consumer_name
+     FROM medical_procedures mp
+     LEFT JOIN consumer_descriptions cd ON mp.code = cd.code
+     WHERE mp.code IN (${placeholders})`
   ).bind(...codes).all();
 
   // Get geographic rates if state specified
