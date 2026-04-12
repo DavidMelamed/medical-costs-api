@@ -4,3 +4,7 @@ dist/
 .dev.vars
 *.log
 .DS_Store
+data/cms/
+data/*.csv
+data/*.json
+data/transparency/
