@@ -1,7 +1,7 @@
 ---
 import Base from '@/layouts/Base.astro';
 import RelatedLinks from '@/components/RelatedLinks.astro';
-import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, getGraphRelationships, getConsumerDescription, getAlternatives, formatCurrencyFull, slugify, STATES } from '@/lib/api';
+import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, getGraphRelationships, getConsumerDescription, getAlternatives, getNegotiatedRates, formatCurrencyFull, slugify, STATES } from '@/lib/api';
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect('/procedures/');
@@ -20,13 +20,21 @@ if (!procedure) return Astro.redirect(`/procedures/?search=${encodeURIComponent(
 const p = procedure as any;
 
 // Fetch related procedures, knowledge graph, consumer description, and interesting facts in parallel
-const [relatedProcedures, graphData, consumerDesc, interestingFacts, alternativesData] = await Promise.all([
+const [relatedProcedures, graphData, consumerDesc, interestingFacts, alternativesData, negotiatedRates] = await Promise.all([
   getRelatedProcedures(p.code),
   getGraphRelationships('procedure', p.code),
   getConsumerDescription(p.code),
   getMetricsFacts(),
   getAlternatives(p.code),
+  getNegotiatedRates(p.code),
 ]);
+
+// Group negotiated rates by major payer for display
+const topPayers = (negotiatedRates?.byPayer || [])
+  .filter((p: any) => p.numHospitals >= 2 || p.numRates >= 3)
+  .sort((a: any, b: any) => b.numRates - a.numRates)
+  .slice(0, 12);
+const hasNegotiatedRates = topPayers.length > 0;
 
 // Extract "commonly_paired" from graph data
 const commonlyPaired = (graphData?.relationships?.commonly_paired || []).slice(0, 6);
@@ -72,10 +80,10 @@ const schema = {
   ...(p.nationalFacilityRate && {
     "offers": {
       "@type": "AggregateOffer",
-      "lowPrice": p.nationalFacilityRate,
-      "highPrice": commercialEstimates.facilityHigh || p.nationalFacilityRate * 2.5,
+      "lowPrice": hasNegotiatedRates ? negotiatedRates!.summary.overallMin : p.nationalFacilityRate,
+      "highPrice": hasNegotiatedRates ? negotiatedRates!.summary.overallMax : (commercialEstimates.facilityHigh || p.nationalFacilityRate * 2.5),
       "priceCurrency": "USD",
-      "offerCount": geoCosts.length || 1,
+      "offerCount": hasNegotiatedRates ? negotiatedRates!.summary.totalRates : (geoCosts.length || 1),
     }
   }),
 };
@@ -413,6 +421,87 @@ const faqSchema = {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        <!-- What Insurance Companies Actually Pay -->
+        {hasNegotiatedRates && (
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden" id="insurance-rates">
+            <div class="px-6 py-4 border-b bg-indigo-50">
+              <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <svg class="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                What Insurance Companies Actually Pay
+              </h2>
+              <p class="text-sm text-indigo-700 mt-1">
+                Real negotiated rates from {negotiatedRates!.summary.totalHospitals} hospitals across {negotiatedRates!.summary.totalStates} states
+                <span class="text-xs ml-1">(from hospital price transparency filings)</span>
+              </p>
+            </div>
+
+            <div class="px-6 py-4">
+              <!-- Overall range -->
+              <div class="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+                <div class="text-center">
+                  <div class="text-xs text-gray-500 uppercase">Lowest</div>
+                  <div class="text-lg font-bold text-green-700">{formatCurrencyFull(negotiatedRates!.summary.overallMin)}</div>
+                </div>
+                <div class="flex-1 h-2 bg-gradient-to-r from-green-300 via-yellow-300 to-red-300 rounded-full"></div>
+                <div class="text-center">
+                  <div class="text-xs text-gray-500 uppercase">Highest</div>
+                  <div class="text-lg font-bold text-red-700">{formatCurrencyFull(negotiatedRates!.summary.overallMax)}</div>
+                </div>
+                <div class="text-center border-l pl-4">
+                  <div class="text-xs text-gray-500 uppercase">Average</div>
+                  <div class="text-lg font-bold text-gray-900">{formatCurrencyFull(negotiatedRates!.summary.overallAvg)}</div>
+                </div>
+              </div>
+
+              <!-- Rates by payer -->
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b text-left text-gray-500 text-xs uppercase">
+                    <th class="py-2 pr-4">Insurance Company</th>
+                    <th class="py-2 text-right">Avg Rate</th>
+                    <th class="py-2 text-right">Range</th>
+                    <th class="py-2 text-right">Hospitals</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  {topPayers.map((tp: any) => (
+                    <tr class="hover:bg-gray-50">
+                      <td class="py-2.5 pr-4 font-medium text-gray-900">{tp.payerName}</td>
+                      <td class="py-2.5 text-right font-semibold">{formatCurrencyFull(tp.avgRate)}</td>
+                      <td class="py-2.5 text-right text-gray-500 text-xs">
+                        {tp.minRate !== tp.maxRate
+                          ? `${formatCurrencyFull(tp.minRate)} - ${formatCurrencyFull(tp.maxRate)}`
+                          : formatCurrencyFull(tp.minRate)}
+                      </td>
+                      <td class="py-2.5 text-right text-gray-400">{tp.numHospitals}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {(negotiatedRates?.byState || []).length > 1 && (
+                <div class="mt-4 pt-4 border-t">
+                  <div class="text-xs font-semibold text-gray-500 uppercase mb-2">Average by State</div>
+                  <div class="flex flex-wrap gap-2">
+                    {(negotiatedRates!.byState as any[]).map((s: any) => (
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {s.state}: {formatCurrencyFull(s.avgRate)}
+                        <span class="text-gray-400 ml-1">({s.numRates})</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div class="px-6 py-3 bg-amber-50 border-t border-amber-200 text-xs text-amber-800">
+              <strong>Disclaimer:</strong> These rates are from hospital Machine-Readable Files (MRFs) required by federal price transparency law.
+              They reflect specific hospital-payer contracts and may not represent your actual cost, which depends on your plan, deductible, and network status.
+              Data sourced from CommonSpirit Health, HCA Healthcare, and Kaiser Permanente filings.
+            </div>
           </div>
         )}
 

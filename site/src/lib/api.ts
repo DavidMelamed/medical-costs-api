@@ -398,6 +398,39 @@ export async function getTrends(): Promise<Record<string, TrendPoint[]>> {
   return data || {};
 }
 
+export interface NegotiatedRatesByPayer {
+  payerName: string;
+  numRates: number;
+  minRate: number;
+  maxRate: number;
+  avgRate: number;
+  numHospitals: number;
+}
+
+export interface NegotiatedRatesResponse {
+  code: string;
+  codeType: string;
+  description: string;
+  summary: {
+    totalRates: number;
+    totalHospitals: number;
+    totalPayers: number;
+    totalStates: number;
+    overallMin: number;
+    overallMax: number;
+    overallAvg: number;
+  };
+  byPayer: NegotiatedRatesByPayer[];
+  byState: Array<{ state: string; numRates: number; avgRate: number; minRate: number; maxRate: number }>;
+  disclaimer: string;
+}
+
+export async function getNegotiatedRates(code: string, state?: string): Promise<NegotiatedRatesResponse | null> {
+  const params = new URLSearchParams({ code });
+  if (state) params.set('state', state);
+  return fetchApi<NegotiatedRatesResponse>(`/negotiated-rates?${params}`);
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },

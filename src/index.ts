@@ -89,6 +89,7 @@ export default {
       if (path === "/api/body-systems") return handleBodySystems(env, cors);
       if (path === "/api/hospitals") return handleHospitals(url, env, cors);
       if (path === "/api/trends") return handleTrends(env, cors);
+      if (path === "/api/negotiated-rates") return handleNegotiatedRates(url, env, cors);
 
       // Body system detail
       const bodySystemMatch = path.match(/^\/api\/body-systems\/([^/]+)$/);
@@ -168,6 +169,7 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/search?q=term",
         "GET /api/hospitals?state=CO&drg=470",
         "GET /api/trends",
+        "GET /api/negotiated-rates?code=99285",
       ],
     },
     cors,
@@ -1861,4 +1863,133 @@ async function handleMedications(conditionSlug: string, env: Env, cors: Record<s
     medications,
     total: medications.length,
   }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/negotiated-rates?code=99285&state=CO&payer=Cigna
+// Returns real negotiated rates from hospital price transparency (MRF) data
+// ---------------------------------------------------------------------------
+
+async function handleNegotiatedRates(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const payer = url.searchParams.get("payer");
+  const setting = url.searchParams.get("setting"); // inpatient or outpatient
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "500", 10) || 500, 1), 1000);
+
+  if (!code) {
+    return error("Required parameter: code (e.g. 99285, 72148, 470)", 400, cors);
+  }
+
+  // Build query with optional filters
+  const conditions = ["code = ?1"];
+  const params: string[] = [code];
+  let paramIdx = 2;
+
+  if (state) {
+    conditions.push(`hospital_state = ?${paramIdx}`);
+    params.push(state);
+    paramIdx++;
+  }
+  if (payer) {
+    conditions.push(`payer_name LIKE ?${paramIdx}`);
+    params.push(`%${payer}%`);
+    paramIdx++;
+  }
+  if (setting) {
+    conditions.push(`setting = ?${paramIdx}`);
+    params.push(setting);
+    paramIdx++;
+  }
+
+  const where = conditions.join(" AND ");
+
+  // Get all matching rates
+  const stmt = env.DB.prepare(`
+    SELECT
+      hospital_name AS hospitalName,
+      hospital_state AS hospitalState,
+      code,
+      code_type AS codeType,
+      description,
+      payer_name AS payerName,
+      plan_name AS planName,
+      negotiated_rate AS negotiatedRate,
+      methodology,
+      setting
+    FROM hospital_negotiated_rates
+    WHERE ${where}
+    ORDER BY negotiated_rate ASC
+    LIMIT ?${paramIdx}
+  `);
+
+  const { results: rates } = await stmt.bind(...params, limit).all();
+
+  // Compute aggregates by payer
+  const { results: payerAggs } = await env.DB.prepare(`
+    SELECT
+      payer_name AS payerName,
+      COUNT(*) AS numRates,
+      MIN(negotiated_rate) AS minRate,
+      MAX(negotiated_rate) AS maxRate,
+      AVG(negotiated_rate) AS avgRate,
+      COUNT(DISTINCT hospital_name) AS numHospitals
+    FROM hospital_negotiated_rates
+    WHERE ${where}
+    GROUP BY payer_name
+    ORDER BY avgRate ASC
+  `).bind(...params).all();
+
+  // Compute overall stats
+  const { results: overallStats } = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS totalRates,
+      COUNT(DISTINCT hospital_name) AS totalHospitals,
+      COUNT(DISTINCT payer_name) AS totalPayers,
+      COUNT(DISTINCT hospital_state) AS totalStates,
+      MIN(negotiated_rate) AS overallMin,
+      MAX(negotiated_rate) AS overallMax,
+      AVG(negotiated_rate) AS overallAvg,
+      description
+    FROM hospital_negotiated_rates
+    WHERE ${where}
+  `).bind(...params).all();
+
+  const stats = overallStats?.[0] || {};
+
+  // State breakdown
+  const { results: stateBreakdown } = await env.DB.prepare(`
+    SELECT
+      hospital_state AS state,
+      COUNT(*) AS numRates,
+      AVG(negotiated_rate) AS avgRate,
+      MIN(negotiated_rate) AS minRate,
+      MAX(negotiated_rate) AS maxRate
+    FROM hospital_negotiated_rates
+    WHERE ${where}
+    GROUP BY hospital_state
+    ORDER BY avgRate ASC
+  `).bind(...params).all();
+
+  return success({
+    code,
+    codeType: (rates as Array<Record<string, unknown>>)[0]?.codeType || "CPT",
+    description: (stats as Record<string, unknown>).description || "",
+    filters: { state, payer, setting },
+    summary: {
+      totalRates: (stats as Record<string, unknown>).totalRates,
+      totalHospitals: (stats as Record<string, unknown>).totalHospitals,
+      totalPayers: (stats as Record<string, unknown>).totalPayers,
+      totalStates: (stats as Record<string, unknown>).totalStates,
+      overallMin: (stats as Record<string, unknown>).overallMin,
+      overallMax: (stats as Record<string, unknown>).overallMax,
+      overallAvg: Math.round(((stats as Record<string, unknown>).overallAvg as number || 0) * 100) / 100,
+    },
+    byPayer: payerAggs,
+    byState: stateBreakdown,
+    rates,
+    disclaimer: "Negotiated rates are sourced from hospital Machine-Readable Files (MRFs) required by the Hospital Price Transparency Rule. " +
+      "Rates reflect specific hospital-payer contracts and may not represent what you will pay. " +
+      "Your actual cost depends on your specific insurance plan, deductible, and out-of-pocket maximum.",
+  }, cors, { source: "Hospital Price Transparency MRFs (CMS mandate)" });
 }
