@@ -1,0 +1,82 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getCompare, formatCurrencyFull, STATES } from '@/lib/api';
+
+export function getStaticPaths() {
+  return STATES.map(s => ({ params: { state: s.code.toLowerCase() } }));
+}
+
+const { state } = Astro.params;
+const stateUpper = state!.toUpperCase();
+const stateInfo = STATES.find(s => s.code === stateUpper);
+const stateName = stateInfo?.name || stateUpper;
+
+// Compare key procedures for this state
+const keyCodes = ['99285', '72148', '70450', '97110', '27427', '99213'];
+const comparisons = await Promise.all(
+  keyCodes.map(code => getCompare(code, [stateUpper]))
+);
+
+const title = `Medical Costs in ${stateName} — Healthcare Procedure Prices | MedicalCosts.info`;
+const description = `Compare medical procedure costs in ${stateName}. See Medicare rates, hospital outpatient prices, and estimated commercial insurance costs for common procedures.`;
+---
+
+<Base title={title} description={description} canonical={`/states/${state}/`}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/states/" class="hover:text-brand-600">States</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">{stateName}</span>
+    </nav>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Medical Costs in {stateName}</h1>
+    <p class="text-gray-500 mb-8">
+      Medicare-adjusted procedure costs for {stateName} based on CMS Geographic Practice Cost Indices.
+    </p>
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+        <div class="col-span-5">Procedure</div>
+        <div class="col-span-2 text-right">National Medicare</div>
+        <div class="col-span-2 text-right">{stateUpper} Medicare</div>
+        <div class="col-span-3 text-right">Est. Commercial ({stateUpper})</div>
+      </div>
+
+      {comparisons.map((comp, i) => {
+        if (!comp) return null;
+        const proc = comp.procedure;
+        const stateData = comp.states?.[stateUpper]?.[0];
+        return (
+          <a
+            href={`/procedures/${proc.code}/`}
+            class="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 hover:bg-blue-50 transition-colors items-center"
+          >
+            <div class="col-span-5">
+              <span class="font-mono text-sm text-brand-600 mr-2">{proc.code}</span>
+              <span class="text-sm font-medium text-gray-900">{proc.description}</span>
+            </div>
+            <div class="col-span-2 text-right text-sm text-gray-500">
+              {proc.nationalMedicareRate ? formatCurrencyFull(proc.nationalMedicareRate) : '—'}
+            </div>
+            <div class="col-span-2 text-right text-sm font-semibold text-gray-900">
+              {stateData?.facilityRate ? formatCurrencyFull(stateData.facilityRate) : '—'}
+            </div>
+            <div class="col-span-3 text-right text-sm text-orange-700">
+              {stateData?.estimatedCommercialLow && stateData?.estimatedCommercialHigh
+                ? `${formatCurrencyFull(stateData.estimatedCommercialLow)} — ${formatCurrencyFull(stateData.estimatedCommercialHigh)}`
+                : '—'}
+            </div>
+          </a>
+        );
+      })}
+    </div>
+
+    <div class="mt-8 text-center">
+      <a href="/procedures/" class="text-brand-600 font-semibold hover:underline">
+        Search all 21,000+ procedures →
+      </a>
+    </div>
+  </div>
+</Base>

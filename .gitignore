@@ -8,3 +8,6 @@ data/cms/
 data/*.csv
 data/*.json
 data/transparency/
+site/dist/
+site/node_modules/
+site/.astro/

@@ -1,0 +1,139 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getProcedures, getCategories, formatCurrencyFull } from '@/lib/api';
+
+const search = Astro.url.searchParams.get('search') || '';
+const category = Astro.url.searchParams.get('category') || '';
+const page = parseInt(Astro.url.searchParams.get('page') || '1');
+const limit = 50;
+const offset = (page - 1) * limit;
+
+const { data: procedures, pagination } = await getProcedures({ search, category, limit, offset });
+const { categories } = await getCategories();
+const totalPages = Math.ceil((pagination?.total || 0) / limit);
+
+const title = search
+  ? `"${search}" Medical Procedure Costs — ${pagination.total} Results | MedicalCosts.info`
+  : category
+    ? `${category} Procedure Costs — ${pagination.total} Procedures | MedicalCosts.info`
+    : `Medical Procedure Costs — Browse ${pagination.total?.toLocaleString()} Procedures | MedicalCosts.info`;
+
+const description = search
+  ? `Find costs for "${search}" procedures. Compare Medicare facility, non-facility, hospital outpatient, and surgery center rates.`
+  : `Browse costs for ${pagination.total?.toLocaleString()} medical procedures. Medicare rates, hospital outpatient costs, and surgery center prices from CMS 2026 data.`;
+---
+
+<Base title={title} description={description} canonical="/procedures/">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumbs -->
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Procedures</span>
+    </nav>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">
+      {search ? `Results for "${search}"` : category ? `${category} Procedures` : 'Medical Procedure Costs'}
+    </h1>
+    <p class="text-gray-500 mb-8">
+      {pagination.total?.toLocaleString()} procedures with Medicare rates from the CMS 2026 Physician Fee Schedule
+    </p>
+
+    <!-- Search + Filter -->
+    <div class="flex flex-col sm:flex-row gap-4 mb-8">
+      <form action="/procedures/" method="GET" class="flex-1 flex gap-2">
+        <input
+          type="text"
+          name="search"
+          value={search}
+          placeholder="Search by name or CPT code..."
+          class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+        />
+        <button type="submit" class="px-6 py-3 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700">Search</button>
+      </form>
+    </div>
+
+    <!-- Category pills -->
+    <div class="flex flex-wrap gap-2 mb-8">
+      <a
+        href="/procedures/"
+        class={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${!category ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+      >All</a>
+      {(categories || []).slice(0, 15).map(cat => {
+        const name = Array.isArray(cat) ? cat[0] : '';
+        return (
+          <a
+            href={`/procedures/?category=${encodeURIComponent(name)}`}
+            class={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${category === name ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >{name}</a>
+        );
+      })}
+    </div>
+
+    <!-- Results table -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+        <div class="col-span-1">Code</div>
+        <div class="col-span-4">Description</div>
+        <div class="col-span-2">Category</div>
+        <div class="col-span-2 text-right">Medicare Rate</div>
+        <div class="col-span-2 text-right">Hospital Outpatient</div>
+        <div class="col-span-1 text-right">ASC</div>
+      </div>
+
+      {procedures.map(proc => (
+        <a
+          href={`/procedures/${proc.code}/`}
+          class="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 hover:bg-blue-50 transition-colors items-center group"
+        >
+          <div class="col-span-12 md:col-span-1">
+            <span class="font-mono text-sm text-brand-600">{proc.code}</span>
+          </div>
+          <div class="col-span-12 md:col-span-4">
+            <span class="text-sm font-medium text-gray-900 group-hover:text-brand-700">{proc.description}</span>
+          </div>
+          <div class="col-span-6 md:col-span-2">
+            <span class="text-xs text-gray-500">{proc.category}</span>
+          </div>
+          <div class="col-span-2 md:col-span-2 text-right">
+            <span class="text-sm font-semibold text-gray-900">
+              {proc.nationalFacilityRate ? formatCurrencyFull(proc.nationalFacilityRate) : '—'}
+            </span>
+          </div>
+          <div class="col-span-2 md:col-span-2 text-right">
+            <span class="text-sm text-gray-600">
+              {proc.hospitalOutpatientCost ? formatCurrencyFull(proc.hospitalOutpatientCost) : '—'}
+            </span>
+          </div>
+          <div class="col-span-2 md:col-span-1 text-right">
+            <span class="text-sm text-gray-600">
+              {proc.ascCost ? formatCurrencyFull(proc.ascCost) : '—'}
+            </span>
+          </div>
+        </a>
+      ))}
+
+      {procedures.length === 0 && (
+        <div class="px-6 py-12 text-center text-gray-500">
+          <p class="text-lg">No procedures found{search ? ` for "${search}"` : ''}.</p>
+          <a href="/procedures/" class="text-brand-600 hover:underline mt-2 inline-block">Clear filters</a>
+        </div>
+      )}
+    </div>
+
+    <!-- Pagination -->
+    {totalPages > 1 && (
+      <div class="flex justify-center gap-2 mt-8">
+        {page > 1 && (
+          <a href={`/procedures/?${new URLSearchParams({ ...(search ? { search } : {}), ...(category ? { category } : {}), page: String(page - 1) })}`}
+             class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&larr; Previous</a>
+        )}
+        <span class="px-4 py-2 text-sm text-gray-500">Page {page} of {totalPages}</span>
+        {page < totalPages && (
+          <a href={`/procedures/?${new URLSearchParams({ ...(search ? { search } : {}), ...(category ? { category } : {}), page: String(page + 1) })}`}
+             class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Next &rarr;</a>
+        )}
+      </div>
+    )}
+  </div>
+</Base>
