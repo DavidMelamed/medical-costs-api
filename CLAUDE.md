@@ -5,7 +5,7 @@ Standalone Cloudflare Workers + D1 API for medical cost estimation.
 ## Architecture
 - **Runtime:** Cloudflare Workers (single `src/index.ts`)
 - **Database:** Cloudflare D1 (SQLite) — `medical-costs-db` (ID: `f3c4c390-86ac-4ffc-a887-0198c35abdc2`)
-- **Schema:** `schema.sql` (6 tables)
+- **Schema:** `schema.sql` (includes hospital_quality table with 5,426 CMS Hospital Compare records)
 - **Seed data:** `seed.sql` (22 injury categories, 80+ procedures, geographic costs, WISQARS/NHTSA aggregates)
 
 ## Key Commands
@@ -27,6 +27,7 @@ All public/free:
 - NHTSA Economic Impact of Motor Vehicle Crashes (2019 data)
 - ICD-10-CM injury codes (S00-T88, V00-Y99)
 - CPT procedure codes for common injury treatments
+- CMS Hospital Compare (5,426 hospitals, 2,866 with star ratings 1-5, mortality/safety/readmission measures)
 
 ## Database Column Convention
 - DB uses snake_case (SQLite)
