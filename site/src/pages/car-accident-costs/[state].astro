@@ -1,21 +1,14 @@
 ---
 import Base from '@/layouts/Base.astro';
 import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
-import { STATE_AUTO_INSURANCE, getStateSlug, formatBiLimits, faultSystemLabel, type StateAutoInsurance } from '@/lib/auto-insurance-data';
+import { STATE_AUTO_INSURANCE, getStateSlug, getStateBySlug, formatBiLimits, faultSystemLabel, type StateAutoInsurance } from '@/lib/auto-insurance-data';
 
-export function getStaticPaths() {
-  return STATE_AUTO_INSURANCE.map(s => ({
-    params: { state: getStateSlug(s.stateName) },
-    props: { stateData: s },
-  }));
+const { state: stateSlug } = Astro.params;
+const s = getStateBySlug(stateSlug!);
+
+if (!s) {
+  return Astro.redirect('/car-accident-costs/');
 }
-
-interface Props {
-  stateData: StateAutoInsurance;
-}
-
-const { stateData } = Astro.props;
-const s = stateData;
 
 const title = `Car Accident Medical Costs in ${s.stateName} — Insurance Rules & Coverage | MedicalCosts.info`;
 const description = `${s.stateName} auto insurance rules for car accident medical bills. ${faultSystemLabel(s.faultSystem)} state. Minimum BI: ${formatBiLimits(s.minBiPerPerson, s.minBiPerAccident)}. ${s.pipRequired ? `PIP required ($${s.pipMinimum?.toLocaleString()}).` : 'PIP not required.'} Average premium: $${s.avgAnnualPremium?.toLocaleString()}/year.`;
