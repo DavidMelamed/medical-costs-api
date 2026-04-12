@@ -1,0 +1,223 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getHospitalRankings, getHospitalStates, formatCurrencyFull, STATES } from '@/lib/api';
+
+const rankingsData = await getHospitalRankings('charges', 'desc', 10);
+const leastExpensive = await getHospitalRankings('charges', 'asc', 10);
+const bestValue = await getHospitalRankings('value', 'asc', 10);
+const stateData = await getHospitalStates();
+
+const rankings = rankingsData?.rankings || [];
+const leastExpRankings = leastExpensive?.rankings || [];
+const valueRankings = bestValue?.rankings || [];
+const national = rankingsData?.national;
+
+const totalHospitals = national?.totalHospitals || 2945;
+const totalDischarges = national?.totalDischarges || 0;
+const nationalAvgCharges = national?.nationalAvgCharges || 0;
+const nationalAvgPayments = national?.nationalAvgPayments || 0;
+
+const stateMap = new Map(STATES.map(s => [s.code, s.name]));
+
+const title = `Hospital Cost Comparison — Compare Prices at ${totalHospitals.toLocaleString()} Hospitals | MedicalCosts.info`;
+const description = `Compare hospital costs across ${totalHospitals.toLocaleString()} hospitals in all 50 states. See average charges, Medicare payments, and charge-to-payment ratios from CMS inpatient data.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Hospital Cost Comparison",
+  "description": description,
+  "url": "https://medicalcosts.info/hospitals/",
+  "breadcrumb": {
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://medicalcosts.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Hospitals", "item": "https://medicalcosts.info/hospitals/" }
+    ]
+  }
+};
+---
+
+<Base title={title} description={description} canonical="/hospitals/" schema={schema}>
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-teal-700 via-teal-800 to-teal-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="text-sm text-teal-200 mb-6">
+        <a href="/" class="hover:text-white">Home</a>
+        <span class="mx-2">/</span>
+        <span class="text-white font-medium">Hospitals</span>
+      </nav>
+      <h1 class="text-4xl md:text-5xl font-extrabold mb-4">Hospital Cost Comparison</h1>
+      <p class="text-xl text-teal-100 max-w-3xl mb-8">
+        Compare prices at <strong>{totalHospitals.toLocaleString()} hospitals</strong> across all 50 states using real CMS Medicare inpatient discharge data covering 534 diagnosis groups.
+      </p>
+      <form action="/hospitals/" method="GET" class="flex gap-3 max-w-xl">
+        <input
+          type="text"
+          name="search"
+          placeholder="Search by hospital name or state..."
+          class="flex-1 px-5 py-3 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-teal-300 shadow-lg"
+        />
+        <button type="submit" class="px-6 py-3 bg-white text-teal-700 font-bold rounded-xl hover:bg-teal-50 transition-colors shadow-lg">
+          Search
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- National Stats -->
+  <section class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <div>
+          <div class="text-2xl font-bold text-teal-700">{totalHospitals.toLocaleString()}</div>
+          <div class="text-sm text-gray-500">Hospitals Tracked</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-teal-700">{totalDischarges?.toLocaleString()}</div>
+          <div class="text-sm text-gray-500">Total Discharges</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-teal-700">{formatCurrencyFull(nationalAvgCharges)}</div>
+          <div class="text-sm text-gray-500">National Avg Charges</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-teal-700">{formatCurrencyFull(nationalAvgPayments)}</div>
+          <div class="text-sm text-gray-500">National Avg Payment</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Most Expensive Hospitals -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <h2 class="text-2xl font-bold text-gray-900 mb-2">Top 10 Most Expensive Hospitals</h2>
+    <p class="text-gray-500 mb-6">Hospitals with the highest average charges across all DRGs</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b-2 border-gray-200 text-left">
+            <th class="py-3 pr-4 font-semibold text-gray-600">#</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600">Hospital</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600">Location</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Charges</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Payment</th>
+            <th class="py-3 font-semibold text-gray-600 text-right">Markup</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rankings.map((h, i) => (
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+              <td class="py-3 pr-4 text-gray-400 font-mono">{i + 1}</td>
+              <td class="py-3 pr-4 font-medium text-gray-900">
+                <a href={`/hospitals/${h.providerState.toLowerCase()}/`} class="hover:text-teal-600">{h.providerName}</a>
+              </td>
+              <td class="py-3 pr-4 text-gray-500">{h.providerCity}, {h.providerState}</td>
+              <td class="py-3 pr-4 text-right font-semibold text-red-600">{formatCurrencyFull(h.avgCharges)}</td>
+              <td class="py-3 pr-4 text-right text-gray-700">{formatCurrencyFull(h.avgPayments)}</td>
+              <td class="py-3 text-right">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">{h.avgMarkup}x</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Least Expensive + Best Value side by side -->
+  <section class="bg-gray-50 py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid lg:grid-cols-2 gap-8">
+        <!-- Least Expensive -->
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Top 10 Least Expensive</h2>
+          <p class="text-gray-500 mb-6">Lowest average charges nationally</p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {leastExpRankings.map((h, i) => (
+              <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-green-50 transition-colors">
+                <div class="flex items-center gap-3 min-w-0">
+                  <span class="text-sm font-mono text-gray-400 w-6">{i + 1}</span>
+                  <div class="min-w-0">
+                    <div class="font-medium text-gray-900 truncate">{h.providerName}</div>
+                    <div class="text-xs text-gray-500">{h.providerCity}, {h.providerState}</div>
+                  </div>
+                </div>
+                <div class="text-right flex-shrink-0 ml-4">
+                  <div class="font-semibold text-green-700">{formatCurrencyFull(h.avgCharges)}</div>
+                  <div class="text-xs text-gray-400">{h.avgMarkup}x markup</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <!-- Best Value -->
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Top 10 Best Value</h2>
+          <p class="text-gray-500 mb-6">Lowest charge-to-payment ratio (most efficient)</p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {valueRankings.map((h, i) => (
+              <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-teal-50 transition-colors">
+                <div class="flex items-center gap-3 min-w-0">
+                  <span class="text-sm font-mono text-gray-400 w-6">{i + 1}</span>
+                  <div class="min-w-0">
+                    <div class="font-medium text-gray-900 truncate">{h.providerName}</div>
+                    <div class="text-xs text-gray-500">{h.providerCity}, {h.providerState}</div>
+                  </div>
+                </div>
+                <div class="text-right flex-shrink-0 ml-4">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">{h.avgMarkup}x markup</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Browse by State -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <h2 class="text-2xl font-bold text-gray-900 mb-2">Hospital Costs by State</h2>
+    <p class="text-gray-500 mb-6">Select a state to compare hospitals, costs, and DRG pricing</p>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {STATES.map(state => {
+        const sd = stateData.find(s => s.state === state.code);
+        return (
+          <a
+            href={`/hospitals/${state.code.toLowerCase()}/`}
+            class="bg-white rounded-xl border border-gray-200 p-4 hover:border-teal-500 hover:shadow-md transition-all group"
+          >
+            <div class="text-lg font-bold text-teal-600 group-hover:text-teal-700">{state.code}</div>
+            <div class="text-sm font-medium text-gray-900">{state.name}</div>
+            {sd && (
+              <div class="text-xs text-gray-500 mt-1">{sd.hospitalCount} hospitals</div>
+            )}
+          </a>
+        );
+      })}
+    </div>
+  </section>
+
+  <!-- Methodology -->
+  <section class="bg-gray-50 border-t border-gray-200 py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">About This Data</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 class="font-semibold text-gray-900 mb-2">Data Source</h3>
+          <p class="text-sm text-gray-600">CMS Medicare Inpatient Prospective Payment System (IPPS) Provider Summary data, which includes charges and payments for the top DRGs at each hospital.</p>
+        </div>
+        <div class="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 class="font-semibold text-gray-900 mb-2">What Are Charges?</h3>
+          <p class="text-sm text-gray-600">Charges are the hospital's list price (chargemaster). Nobody actually pays this amount. Think of it as the "sticker price" before insurance negotiation.</p>
+        </div>
+        <div class="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 class="font-semibold text-gray-900 mb-2">What Are Payments?</h3>
+          <p class="text-sm text-gray-600">Payments are what Medicare actually paid. The ratio of charges to payments reveals how much hospitals mark up over what insurers pay.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

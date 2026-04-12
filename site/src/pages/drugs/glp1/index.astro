@@ -1,0 +1,564 @@
+---
+import Base from '@/layouts/Base.astro';
+import { formatCurrencyFull } from '@/lib/api';
+
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://medical-costs-api.david-568.workers.dev';
+
+let glp1Data: any = null;
+try {
+  const res = await fetch(`${API_BASE}/api/drugs/glp1`);
+  const json = await res.json();
+  if (json.success) glp1Data = json.data;
+} catch {}
+
+const drugs = glp1Data?.drugs || [];
+const genericAlts = glp1Data?.genericAlternatives || [];
+const summary = glp1Data?.summary || {};
+
+function formatNadacPrice(rate: number | null): string {
+  if (rate == null) return 'N/A';
+  if (rate < 0.01) return '<$0.01';
+  if (rate < 1) return `$${rate.toFixed(4)}`;
+  return `$${rate.toFixed(2)}`;
+}
+
+function drugDisplayName(desc: string): string {
+  return desc.split(' ').map((w: string, i: number) => {
+    if (i === 0) return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    if (/^\d/.test(w) || ['MG', 'ML', 'MCG', 'GM', 'TAB', 'CAP', 'SOLN', 'SUSP', 'INJ', 'TABLET', 'CAPSULE', 'PEN', 'SYRINGE', 'AUTOINJECT', 'INJECT', 'VIAL'].includes(w.toUpperCase())) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
+}
+
+// Group by active ingredient
+const semaglutideDrugs = drugs.filter((d: any) => d.genericName.includes('semaglutide'));
+const tirzepatideDrugs = drugs.filter((d: any) => d.genericName.includes('tirzepatide'));
+const dulaglutideDrugs = drugs.filter((d: any) => d.genericName.includes('dulaglutide'));
+const liraglutideDrugs = drugs.filter((d: any) => d.genericName.includes('liraglutide'));
+const exenatideDrugs = drugs.filter((d: any) => d.genericName.includes('exenatide'));
+
+const title = 'GLP-1 Drug Costs — Ozempic, Wegovy, Mounjaro Prices (2026) | MedicalCosts.info';
+const description = 'Compare GLP-1 weight loss and diabetes drug costs. Ozempic, Wegovy, Mounjaro, Zepbound, and Trulicity NADAC pharmacy acquisition prices with monthly cost estimates from CMS 2026 data.';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "MedicalWebPage",
+  "name": "GLP-1 Drug Costs",
+  "url": "https://medicalcosts.info/drugs/glp1/",
+  "description": description,
+  "about": {
+    "@type": "Drug",
+    "drugClass": "GLP-1 Receptor Agonist"
+  }
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How much does Ozempic cost per month?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Based on NADAC pharmacy acquisition costs, Ozempic costs approximately ${drugs.find((d: any) => d.brand === 'OZEMPIC')?.estimatedMonthlyCost ? formatCurrencyFull(drugs.find((d: any) => d.brand === 'OZEMPIC').estimatedMonthlyCost) : '$800-$1,300'} per month at acquisition cost. Retail prices are typically 20-50% higher. With insurance, copays range from $25 to $150 per month depending on your plan.`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How much does Wegovy cost per month?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Wegovy costs approximately ${drugs.find((d: any) => d.brand === 'WEGOVY')?.estimatedMonthlyCost ? formatCurrencyFull(drugs.find((d: any) => d.brand === 'WEGOVY').estimatedMonthlyCost) : '$1,300-$1,700'} per month at NADAC pharmacy acquisition cost. Without insurance, retail prices can exceed $1,500/month. Many insurance plans have specific coverage criteria for weight loss medications.`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How much does Mounjaro cost per month?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Mounjaro (tirzepatide) costs approximately ${drugs.find((d: any) => d.brand === 'MOUNJARO')?.estimatedMonthlyCost ? formatCurrencyFull(drugs.find((d: any) => d.brand === 'MOUNJARO').estimatedMonthlyCost) : '$1,000-$1,200'} per month at NADAC acquisition cost. Mounjaro is a dual GIP/GLP-1 receptor agonist and has shown significant weight loss results in clinical trials.`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there a generic version of Ozempic or Wegovy?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "As of 2026, there is no FDA-approved generic semaglutide injection (the active ingredient in Ozempic and Wegovy). Novo Nordisk holds the patents. However, generic liraglutide (the active ingredient in Victoza) has become available, offering a more affordable GLP-1 option."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the cheapest GLP-1 drug?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Generic liraglutide is currently the most affordable GLP-1 option, with NADAC costs significantly lower than brand-name alternatives. Among brand-name GLP-1 drugs, Victoza and Saxenda (liraglutide) tend to have the lowest per-unit acquisition costs."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does insurance cover GLP-1 weight loss drugs?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Coverage varies significantly by plan. Most commercial insurance covers GLP-1 drugs for type 2 diabetes (Ozempic, Mounjaro, Trulicity). Coverage for weight loss indications (Wegovy, Zepbound) is less consistent. Medicare Part D historically excluded weight loss drugs, but the Treat and Reduce Obesity Act has expanded coverage. Check with your specific plan for details."
+      }
+    }
+  ]
+};
+---
+
+<Base title={title} description={description} canonical="/drugs/glp1/" schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/drugs/" class="hover:text-brand-600">Drug Prices</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">GLP-1 Drugs</span>
+    </nav>
+
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+      How Much Do GLP-1 Weight Loss & Diabetes Drugs Cost?
+    </h1>
+    <p class="text-lg text-gray-600 mb-4">
+      GLP-1 receptor agonists like Ozempic, Wegovy, and Mounjaro are among the most-prescribed (and most expensive)
+      drugs in America. Here are the actual pharmacy acquisition costs (NADAC) from CMS data.
+    </p>
+    <p class="text-sm text-gray-500 mb-8">
+      Updated with 2026 NADAC data. Prices shown are what pharmacies pay wholesalers — your cost depends on insurance, pharmacy markup, and discount programs.
+    </p>
+
+    <!-- Summary Cards -->
+    <div class="grid sm:grid-cols-3 gap-4 mb-10">
+      <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 p-5 text-center">
+        <div class="text-sm text-blue-600 font-medium mb-1">GLP-1 Drugs in Database</div>
+        <div class="text-3xl font-bold text-blue-700">{summary.totalVariants || drugs.reduce((a: number, d: any) => a + d.variants.length, 0)}</div>
+        <div class="text-xs text-blue-500 mt-1">NDC variants with NADAC pricing</div>
+      </div>
+      <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 p-5 text-center">
+        <div class="text-sm text-green-600 font-medium mb-1">Cheapest Monthly</div>
+        <div class="text-3xl font-bold text-green-700">{summary.cheapestMonthly ? formatCurrencyFull(summary.cheapestMonthly) : '--'}</div>
+        <div class="text-xs text-green-500 mt-1">Lowest estimated monthly cost</div>
+      </div>
+      <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200 p-5 text-center">
+        <div class="text-sm text-red-600 font-medium mb-1">Most Expensive Monthly</div>
+        <div class="text-3xl font-bold text-red-700">{summary.mostExpensiveMonthly ? formatCurrencyFull(summary.mostExpensiveMonthly) : '--'}</div>
+        <div class="text-xs text-red-500 mt-1">Highest estimated monthly cost</div>
+      </div>
+    </div>
+
+    <!-- Monthly Cost Comparison Table -->
+    <div class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">GLP-1 Monthly Cost Comparison</h2>
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-500 uppercase">
+          <div class="col-span-2">Brand</div>
+          <div class="col-span-2">Active Ingredient</div>
+          <div class="col-span-2">Indication</div>
+          <div class="col-span-2 text-right">Avg NADAC/Unit</div>
+          <div class="col-span-2 text-right">Est. Monthly</div>
+          <div class="col-span-2 text-right">Est. Annual</div>
+        </div>
+
+        {drugs.sort((a: any, b: any) => b.estimatedMonthlyCost - a.estimatedMonthlyCost).map((drug: any) => (
+          <div class="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-100 hover:bg-blue-50 transition-colors items-center">
+            <div class="col-span-12 md:col-span-2">
+              <span class="font-bold text-gray-900">{drug.brand}</span>
+            </div>
+            <div class="col-span-6 md:col-span-2">
+              <span class="text-sm text-gray-600 italic">{drug.genericName}</span>
+            </div>
+            <div class="col-span-6 md:col-span-2">
+              <span class={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${drug.indication === 'Weight loss' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                {drug.indication}
+              </span>
+            </div>
+            <div class="col-span-4 md:col-span-2 text-right">
+              <span class="text-sm font-semibold text-gray-900">{formatNadacPrice(drug.avgNadacPerUnit)}</span>
+            </div>
+            <div class="col-span-4 md:col-span-2 text-right">
+              <span class="text-sm font-bold text-brand-700">{formatCurrencyFull(drug.estimatedMonthlyCost)}</span>
+            </div>
+            <div class="col-span-4 md:col-span-2 text-right">
+              <span class="text-sm text-gray-600">{formatCurrencyFull(drug.estimatedAnnualCost)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p class="text-xs text-gray-400 mt-2">
+        Monthly estimates based on typical dosing schedules. Injectable pens: 4 units/month (weekly injection).
+        Oral tablets: 30 units/month (daily). Actual costs depend on dose and pharmacy.
+      </p>
+    </div>
+
+    <!-- Drug Detail Sections -->
+    <div class="space-y-10 mb-12">
+      <!-- Semaglutide (Ozempic / Wegovy / Rybelsus) -->
+      {semaglutideDrugs.length > 0 && (
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Semaglutide (Ozempic, Wegovy, Rybelsus)</h2>
+          <p class="text-gray-600 mb-4">
+            Semaglutide is manufactured by Novo Nordisk. Ozempic is approved for type 2 diabetes, Wegovy for chronic weight management,
+            and Rybelsus is the only oral GLP-1 (tablet form). Semaglutide works by mimicking the GLP-1 hormone, reducing appetite
+            and slowing gastric emptying. Clinical trials showed 15-17% body weight loss with Wegovy.
+          </p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {semaglutideDrugs.map((drug: any) => (
+              <div class="border-b border-gray-100 last:border-b-0">
+                <div class="px-5 py-3 bg-gray-50 flex justify-between items-center">
+                  <div>
+                    <span class="font-bold text-gray-900">{drug.brand}</span>
+                    <span class="text-sm text-gray-500 ml-2">({drug.genericName})</span>
+                    <span class={`ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${drug.indication === 'Weight loss' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {drug.indication}
+                    </span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-lg font-bold text-brand-700">{formatCurrencyFull(drug.estimatedMonthlyCost)}</span>
+                    <span class="text-xs text-gray-500">/mo</span>
+                  </div>
+                </div>
+                <div class="px-5 py-2">
+                  {drug.variants.map((v: any) => (
+                    <a href={`/drugs/${v.code}/`} class="flex justify-between py-1.5 text-sm hover:text-brand-700 transition-colors">
+                      <span class="text-gray-700">{drugDisplayName(v.description)}</span>
+                      <span class="font-mono text-gray-900">{formatNadacPrice(v.nadacPerUnit)}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Tirzepatide (Mounjaro / Zepbound) -->
+      {tirzepatideDrugs.length > 0 && (
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Tirzepatide (Mounjaro, Zepbound)</h2>
+          <p class="text-gray-600 mb-4">
+            Tirzepatide by Eli Lilly is a dual GIP/GLP-1 receptor agonist — the first in its class. Mounjaro is approved for
+            type 2 diabetes and Zepbound for weight management. The SURMOUNT trials showed up to 22.5% body weight reduction,
+            making it the most effective weight loss medication to date. Both are weekly injections.
+          </p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {tirzepatideDrugs.map((drug: any) => (
+              <div class="border-b border-gray-100 last:border-b-0">
+                <div class="px-5 py-3 bg-gray-50 flex justify-between items-center">
+                  <div>
+                    <span class="font-bold text-gray-900">{drug.brand}</span>
+                    <span class={`ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${drug.indication === 'Weight loss' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {drug.indication}
+                    </span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-lg font-bold text-brand-700">{formatCurrencyFull(drug.estimatedMonthlyCost)}</span>
+                    <span class="text-xs text-gray-500">/mo</span>
+                  </div>
+                </div>
+                <div class="px-5 py-2">
+                  {drug.variants.map((v: any) => (
+                    <a href={`/drugs/${v.code}/`} class="flex justify-between py-1.5 text-sm hover:text-brand-700 transition-colors">
+                      <span class="text-gray-700">{drugDisplayName(v.description)}</span>
+                      <span class="font-mono text-gray-900">{formatNadacPrice(v.nadacPerUnit)}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Dulaglutide (Trulicity) -->
+      {dulaglutideDrugs.length > 0 && (
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Dulaglutide (Trulicity)</h2>
+          <p class="text-gray-600 mb-4">
+            Trulicity by Eli Lilly is a once-weekly GLP-1 injection for type 2 diabetes. While it has been largely overshadowed by
+            semaglutide and tirzepatide for weight loss, Trulicity remains widely prescribed for blood sugar control and has
+            demonstrated cardiovascular benefits in the REWIND trial.
+          </p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {dulaglutideDrugs.map((drug: any) => (
+              <div class="border-b border-gray-100 last:border-b-0">
+                <div class="px-5 py-3 bg-gray-50 flex justify-between items-center">
+                  <div>
+                    <span class="font-bold text-gray-900">{drug.brand}</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-lg font-bold text-brand-700">{formatCurrencyFull(drug.estimatedMonthlyCost)}</span>
+                    <span class="text-xs text-gray-500">/mo</span>
+                  </div>
+                </div>
+                <div class="px-5 py-2">
+                  {drug.variants.map((v: any) => (
+                    <a href={`/drugs/${v.code}/`} class="flex justify-between py-1.5 text-sm hover:text-brand-700 transition-colors">
+                      <span class="text-gray-700">{drugDisplayName(v.description)}</span>
+                      <span class="font-mono text-gray-900">{formatNadacPrice(v.nadacPerUnit)}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Liraglutide (Victoza / Saxenda) -->
+      {liraglutideDrugs.length > 0 && (
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Liraglutide (Victoza, Saxenda)</h2>
+          <p class="text-gray-600 mb-4">
+            Liraglutide was one of the first GLP-1 drugs. Victoza is for type 2 diabetes, Saxenda for weight management.
+            Both require daily injections (unlike weekly options). Liraglutide is now available as a generic,
+            making it the most affordable GLP-1 option for patients without comprehensive insurance coverage.
+          </p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {liraglutideDrugs.map((drug: any) => (
+              <div class="border-b border-gray-100 last:border-b-0">
+                <div class="px-5 py-3 bg-gray-50 flex justify-between items-center">
+                  <div>
+                    <span class="font-bold text-gray-900">{drug.brand}</span>
+                    <span class={`ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${drug.indication === 'Weight loss' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {drug.indication}
+                    </span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-lg font-bold text-brand-700">{formatCurrencyFull(drug.estimatedMonthlyCost)}</span>
+                    <span class="text-xs text-gray-500">/mo</span>
+                  </div>
+                </div>
+                <div class="px-5 py-2">
+                  {drug.variants.map((v: any) => (
+                    <a href={`/drugs/${v.code}/`} class="flex justify-between py-1.5 text-sm hover:text-brand-700 transition-colors">
+                      <span class="text-gray-700">{drugDisplayName(v.description)}</span>
+                      <span class="font-mono text-gray-900">{formatNadacPrice(v.nadacPerUnit)}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Exenatide (Byetta / Bydureon) -->
+      {exenatideDrugs.length > 0 && (
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Exenatide (Byetta, Bydureon)</h2>
+          <p class="text-gray-600 mb-4">
+            Exenatide was the first GLP-1 drug approved in the US (2005). Byetta is a twice-daily injection while
+            Bydureon is extended-release (weekly). While newer GLP-1 drugs have shown superior efficacy, exenatide
+            remains an option, particularly as generic exenatide has become available.
+          </p>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {exenatideDrugs.map((drug: any) => (
+              <div class="border-b border-gray-100 last:border-b-0">
+                <div class="px-5 py-3 bg-gray-50 flex justify-between items-center">
+                  <div>
+                    <span class="font-bold text-gray-900">{drug.brand}</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-lg font-bold text-brand-700">{formatCurrencyFull(drug.estimatedMonthlyCost)}</span>
+                    <span class="text-xs text-gray-500">/mo</span>
+                  </div>
+                </div>
+                <div class="px-5 py-2">
+                  {drug.variants.map((v: any) => (
+                    <a href={`/drugs/${v.code}/`} class="flex justify-between py-1.5 text-sm hover:text-brand-700 transition-colors">
+                      <span class="text-gray-700">{drugDisplayName(v.description)}</span>
+                      <span class="font-mono text-gray-900">{formatNadacPrice(v.nadacPerUnit)}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+
+    <!-- Generic GLP-1 Alternatives -->
+    {genericAlts.length > 0 && (
+      <div class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Generic GLP-1 Alternatives</h2>
+        <p class="text-gray-600 mb-4">
+          These are generic versions of GLP-1 drugs now available at lower cost. Currently, generic liraglutide and exenatide
+          are available. No generic semaglutide or tirzepatide exists yet.
+        </p>
+        <div class="bg-white rounded-xl border border-green-200 overflow-hidden">
+          <div class="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-green-50 border-b text-xs font-semibold text-green-700 uppercase">
+            <div class="col-span-7">Drug Name</div>
+            <div class="col-span-2">Type</div>
+            <div class="col-span-3 text-right">NADAC / Unit</div>
+          </div>
+          {genericAlts.map((drug: any) => (
+            <a href={`/drugs/${drug.code}/`} class="grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-100 hover:bg-green-50 transition-colors items-center">
+              <div class="col-span-12 md:col-span-7">
+                <span class="text-sm font-medium text-gray-900">{drugDisplayName(drug.description)}</span>
+              </div>
+              <div class="col-span-6 md:col-span-2">
+                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Generic</span>
+              </div>
+              <div class="col-span-6 md:col-span-3 text-right">
+                <span class="text-sm font-bold text-green-700">{formatNadacPrice(drug.nadacPerUnit)}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Insurance Coverage -->
+    <div class="mb-12 bg-blue-50 rounded-xl p-8 border border-blue-200">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Insurance Coverage for GLP-1 Drugs</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="font-semibold text-gray-900 mb-2">For Type 2 Diabetes</h3>
+          <ul class="space-y-2 text-sm text-gray-700">
+            <li>Most commercial plans cover Ozempic, Mounjaro, and Trulicity</li>
+            <li>Medicare Part D covers diabetes-indicated GLP-1 drugs</li>
+            <li>Prior authorization is commonly required</li>
+            <li>Step therapy may require trying metformin first</li>
+            <li>Typical copay: $25-$150/month with coverage</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 mb-2">For Weight Loss</h3>
+          <ul class="space-y-2 text-sm text-gray-700">
+            <li>Wegovy and Zepbound coverage varies widely</li>
+            <li>Many employers now adding obesity treatment coverage</li>
+            <li>The Treat and Reduce Obesity Act expanded Medicare coverage</li>
+            <li>BMI requirements typically apply (30+, or 27+ with comorbidities)</li>
+            <li>Without coverage: $1,000-$1,500+/month out of pocket</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Patient Assistance Programs -->
+    <div class="mb-12 bg-white rounded-xl border border-gray-200 p-8">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Patient Assistance & Savings Programs</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="border border-gray-200 rounded-lg p-5">
+          <h3 class="font-bold text-gray-900 mb-2">Novo Nordisk Programs</h3>
+          <p class="text-sm text-gray-600 mb-2">For Ozempic, Wegovy, Rybelsus, Victoza, Saxenda:</p>
+          <ul class="space-y-1 text-sm text-gray-700">
+            <li>Savings cards: Pay as little as $25/month (commercially insured)</li>
+            <li>Patient Assistance Program (PAP): Free medication for qualifying uninsured patients</li>
+            <li>NovoCare.com — central hub for all programs</li>
+          </ul>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-5">
+          <h3 class="font-bold text-gray-900 mb-2">Eli Lilly Programs</h3>
+          <p class="text-sm text-gray-600 mb-2">For Mounjaro, Zepbound, Trulicity:</p>
+          <ul class="space-y-1 text-sm text-gray-700">
+            <li>Lilly Savings Card: Reduces copay for eligible patients</li>
+            <li>Lilly Cares: Free medication for qualifying low-income patients</li>
+            <li>LillyDirect.com — direct-to-patient delivery option</li>
+          </ul>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-5">
+          <h3 class="font-bold text-gray-900 mb-2">Third-Party Discount Programs</h3>
+          <ul class="space-y-1 text-sm text-gray-700">
+            <li>GoodRx — compare prices across pharmacies</li>
+            <li>RxSaver — discount codes for uninsured patients</li>
+            <li>Mark Cuban Cost Plus Drugs — transparent pricing</li>
+            <li>NeedyMeds.org — database of assistance programs</li>
+          </ul>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-5">
+          <h3 class="font-bold text-gray-900 mb-2">Compounding Pharmacies</h3>
+          <p class="text-sm text-gray-600">
+            During FDA-recognized shortage periods, compounding pharmacies can produce semaglutide and tirzepatide formulations
+            at significantly lower cost ($200-$500/month). Check FDA drug shortage databases for current status.
+            Note: compounded versions are not FDA-approved.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="bg-gray-50 rounded-xl p-8 mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">GLP-1 Drug Cost FAQs</h2>
+      <div class="space-y-6">
+        <div>
+          <h3 class="font-semibold text-gray-900 text-lg">How much does Ozempic cost per month?</h3>
+          <p class="text-gray-600 mt-1">
+            Ozempic's pharmacy acquisition cost (NADAC) averages {drugs.find((d: any) => d.brand === 'OZEMPIC')?.avgNadacPerUnit ? formatNadacPrice(drugs.find((d: any) => d.brand === 'OZEMPIC').avgNadacPerUnit) : '~$350'} per pen.
+            With weekly dosing (4 pens/month), monthly NADAC cost is approximately {drugs.find((d: any) => d.brand === 'OZEMPIC')?.estimatedMonthlyCost ? formatCurrencyFull(drugs.find((d: any) => d.brand === 'OZEMPIC').estimatedMonthlyCost) : '$1,000-$1,400'}.
+            Retail is typically 20-50% higher. With insurance, expect $25-$150/month.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 text-lg">How much does Wegovy cost per month?</h3>
+          <p class="text-gray-600 mt-1">
+            Wegovy costs approximately {drugs.find((d: any) => d.brand === 'WEGOVY')?.estimatedMonthlyCost ? formatCurrencyFull(drugs.find((d: any) => d.brand === 'WEGOVY').estimatedMonthlyCost) : '$1,300-$1,700'}/month at NADAC.
+            It is more expensive than Ozempic because the weight-loss doses are higher. Insurance coverage for weight loss
+            is less common than for diabetes.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 text-lg">How much does Mounjaro cost per month?</h3>
+          <p class="text-gray-600 mt-1">
+            Mounjaro's estimated monthly cost is {drugs.find((d: any) => d.brand === 'MOUNJARO')?.estimatedMonthlyCost ? formatCurrencyFull(drugs.find((d: any) => d.brand === 'MOUNJARO').estimatedMonthlyCost) : '~$2,155'} at NADAC.
+            It is a dual GIP/GLP-1 agonist with the highest weight loss efficacy in trials (up to 22.5%).
+          </p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 text-lg">Is there a generic version of Ozempic or Wegovy?</h3>
+          <p class="text-gray-600 mt-1">
+            No generic semaglutide injection exists as of 2026. Novo Nordisk's patents protect the formulation.
+            However, generic liraglutide (Victoza's active ingredient) is available and is the most affordable GLP-1 option.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 text-lg">What is the cheapest GLP-1 drug?</h3>
+          <p class="text-gray-600 mt-1">
+            Generic liraglutide is the most affordable GLP-1 option. Among brands, Victoza and Saxenda (liraglutide) have
+            the lowest per-unit costs, though they require daily injections rather than weekly.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-900 text-lg">Does insurance cover GLP-1 weight loss drugs?</h3>
+          <p class="text-gray-600 mt-1">
+            Coverage varies significantly. Most plans cover GLP-1 drugs for diabetes. For weight loss (Wegovy, Zepbound),
+            coverage is improving but inconsistent. Medicare coverage has expanded under the Treat and Reduce Obesity Act.
+            Check your specific plan or call the number on your insurance card.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Internal links -->
+    <div class="grid md:grid-cols-3 gap-4">
+      <a href="/drugs/compare/" class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-md transition-all">
+        <h3 class="font-bold text-gray-900 mb-1">Brand vs Generic Comparison</h3>
+        <p class="text-sm text-gray-500">Find cheaper alternatives for any drug</p>
+      </a>
+      <a href="/drugs/" class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-md transition-all">
+        <h3 class="font-bold text-gray-900 mb-1">All Drug Prices</h3>
+        <p class="text-sm text-gray-500">10,000+ medications with NADAC pricing</p>
+      </a>
+      <a href="/drugs/?search=diabetes" class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-md transition-all">
+        <h3 class="font-bold text-gray-900 mb-1">All Diabetes Drugs</h3>
+        <p class="text-sm text-gray-500">Insulin, metformin, SGLT2 inhibitors & more</p>
+      </a>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="mt-8 bg-yellow-50 rounded-xl p-5 border border-yellow-200">
+      <h3 class="font-bold text-yellow-800 text-sm mb-2">Important Disclaimer</h3>
+      <p class="text-xs text-yellow-700">
+        Prices shown are NADAC pharmacy acquisition costs from CMS and do not reflect what patients pay at the counter.
+        Actual costs vary by pharmacy, insurance plan, discount programs, and geographic location.
+        Monthly estimates are approximate and based on typical dosing. This is not medical or financial advice.
+        Always consult your healthcare provider and pharmacist about medication costs and alternatives.
+      </p>
+    </div>
+  </div>
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+</Base>

@@ -1,0 +1,334 @@
+---
+import Base from '@/layouts/Base.astro';
+import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
+import { STATE_AUTO_INSURANCE, getStateSlug, formatBiLimits, faultSystemLabel, type StateAutoInsurance } from '@/lib/auto-insurance-data';
+
+export function getStaticPaths() {
+  return STATE_AUTO_INSURANCE.map(s => ({
+    params: { state: getStateSlug(s.stateName) },
+    props: { stateData: s },
+  }));
+}
+
+interface Props {
+  stateData: StateAutoInsurance;
+}
+
+const { stateData } = Astro.props;
+const s = stateData;
+
+const title = `Car Accident Medical Costs in ${s.stateName} — Insurance Rules & Coverage | MedicalCosts.info`;
+const description = `${s.stateName} auto insurance rules for car accident medical bills. ${faultSystemLabel(s.faultSystem)} state. Minimum BI: ${formatBiLimits(s.minBiPerPerson, s.minBiPerAccident)}. ${s.pipRequired ? `PIP required ($${s.pipMinimum?.toLocaleString()}).` : 'PIP not required.'} Average premium: $${s.avgAnnualPremium?.toLocaleString()}/year.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": `Car Accident Medical Costs in ${s.stateName}`,
+  "description": description,
+  "author": { "@type": "Organization", "name": "MedicalCosts.info" },
+  "publisher": { "@type": "Organization", "name": "MedicalCosts.info" },
+  "datePublished": "2026-04-12",
+  "dateModified": "2026-04-12"
+};
+
+const faultExplanations: Record<string, string> = {
+  'tort': `${s.stateName} is an at-fault (tort) state. This means the driver who caused the accident is responsible for paying the other party's medical bills and damages through their bodily injury (BI) liability insurance. Injured parties can sue for full damages including pain and suffering without restrictions.`,
+  'no-fault': `${s.stateName} is a no-fault state. This means your own insurance (PIP) pays your medical bills and lost wages regardless of who caused the accident. To sue the at-fault driver for pain and suffering, your injuries must meet the state's "serious injury threshold."`,
+  'choice': `${s.stateName} is a choice state. Drivers can choose between no-fault coverage (with PIP and restricted lawsuit rights) and traditional tort coverage (with full ability to sue for pain and suffering). Your choice affects both your premiums and your legal options after a crash.`,
+};
+
+// Determine nearby states for linking
+const allSorted = [...STATE_AUTO_INSURANCE].sort((a, b) => a.stateName.localeCompare(b.stateName));
+const idx = allSorted.findIndex(st => st.stateCode === s.stateCode);
+const nearbyStates = [
+  allSorted[(idx - 2 + allSorted.length) % allSorted.length],
+  allSorted[(idx - 1 + allSorted.length) % allSorted.length],
+  allSorted[(idx + 1) % allSorted.length],
+  allSorted[(idx + 2) % allSorted.length],
+].filter(st => st.stateCode !== s.stateCode);
+
+const nationalAvgPremium = 2256;
+const premiumVsNational = s.avgAnnualPremium ? ((s.avgAnnualPremium - nationalAvgPremium) / nationalAvgPremium * 100).toFixed(0) : null;
+---
+
+<Base title={title} description={description} canonical={`/car-accident-costs/${getStateSlug(s.stateName)}/`} schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/car-accident-costs/" class="hover:text-brand-600">Car Accident Costs</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">{s.stateName}</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3">Car Accident Medical Costs in {s.stateName}</h1>
+      <p class="text-lg text-gray-600">
+        {s.stateName} is {s.faultSystem === 'tort' ? 'an at-fault (tort)' : s.faultSystem === 'no-fault' ? 'a no-fault' : 'a choice'} state.
+        {s.pipRequired ? `PIP insurance is required with a minimum of $${s.pipMinimum?.toLocaleString()}.` : 'PIP insurance is not required.'}
+        Minimum bodily injury limits are {formatBiLimits(s.minBiPerPerson, s.minBiPerAccident)}.
+      </p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="text-xs uppercase font-semibold text-gray-400 mb-1">Fault System</div>
+        <div class="text-lg font-bold text-gray-900">{faultSystemLabel(s.faultSystem)}</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="text-xs uppercase font-semibold text-gray-400 mb-1">Min BI Limits</div>
+        <div class="text-lg font-bold text-gray-900">{formatBiLimits(s.minBiPerPerson, s.minBiPerAccident)}</div>
+        <div class="text-xs text-gray-400">per person / per accident</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="text-xs uppercase font-semibold text-gray-400 mb-1">Avg Annual Premium</div>
+        <div class="text-lg font-bold text-gray-900">{s.avgAnnualPremium ? `$${s.avgAnnualPremium.toLocaleString()}` : 'N/A'}</div>
+        {premiumVsNational && (
+          <div class={`text-xs ${Number(premiumVsNational) > 0 ? 'text-red-500' : 'text-green-600'}`}>
+            {Number(premiumVsNational) > 0 ? '+' : ''}{premiumVsNational}% vs national avg
+          </div>
+        )}
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="text-xs uppercase font-semibold text-gray-400 mb-1">Uninsured Rate</div>
+        <div class="text-lg font-bold text-gray-900">{s.uninsuredRate ? `${s.uninsuredRate}%` : 'N/A'}</div>
+        <div class="text-xs text-gray-400">National avg: 15.4%</div>
+      </div>
+    </div>
+
+    <!-- Fault system explanation -->
+    <section class="mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">
+        {s.faultSystem === 'tort' ? 'At-Fault (Tort) System' : s.faultSystem === 'no-fault' ? 'No-Fault System' : 'Choice System'} in {s.stateName}
+      </h2>
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <p class="text-gray-600 mb-4">{faultExplanations[s.faultSystem]}</p>
+
+        {s.faultSystem === 'tort' && (
+          <div class="bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <h3 class="font-semibold text-blue-900 mb-2">How medical bills get paid in {s.stateName}:</h3>
+            <ol class="list-decimal list-inside space-y-1 text-sm text-blue-800">
+              <li>MedPay pays first (if you carry it) &mdash; no fault needed</li>
+              <li>Health insurance covers remaining bills (with subrogation rights)</li>
+              <li>Attorney may issue Letter of Protection for ongoing treatment</li>
+              <li>At-fault driver's BI insurance pays through settlement ({formatBiLimits(s.minBiPerPerson, s.minBiPerAccident)} minimum)</li>
+              {s.umRequired ? <li>UM/UIM coverage fills gaps if at-fault driver is underinsured (required in {s.stateName})</li> : <li>UM/UIM coverage fills gaps if carried (optional in {s.stateName})</li>}
+            </ol>
+          </div>
+        )}
+
+        {s.faultSystem === 'no-fault' && s.pipMinimum && (
+          <div class="bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <h3 class="font-semibold text-blue-900 mb-2">How medical bills get paid in {s.stateName}:</h3>
+            <ol class="list-decimal list-inside space-y-1 text-sm text-blue-800">
+              <li>PIP pays first &mdash; up to ${s.pipMinimum.toLocaleString()} for medical bills + lost wages</li>
+              <li>Health insurance covers excess bills (with subrogation rights)</li>
+              <li>If injuries are serious enough, you may sue the at-fault driver</li>
+              <li>At-fault driver's BI insurance pays through settlement if lawsuit threshold met</li>
+            </ol>
+          </div>
+        )}
+
+        {s.faultSystem === 'choice' && (
+          <div class="bg-purple-50 rounded-lg p-4 border border-purple-100">
+            <h3 class="font-semibold text-purple-900 mb-2">Your options in {s.stateName}:</h3>
+            <div class="grid sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <h4 class="font-semibold text-purple-800">If you chose No-Fault:</h4>
+                <ul class="list-disc list-inside text-purple-700 mt-1">
+                  <li>PIP pays your medical bills first</li>
+                  <li>Lower premiums</li>
+                  <li>Restricted ability to sue for pain/suffering</li>
+                </ul>
+              </div>
+              <div>
+                <h4 class="font-semibold text-purple-800">If you chose Tort:</h4>
+                <ul class="list-disc list-inside text-purple-700 mt-1">
+                  <li>Full ability to sue at-fault driver</li>
+                  <li>Can recover pain and suffering</li>
+                  <li>Higher premiums</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- Detailed coverage table -->
+    <section class="mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">{s.stateName} Auto Insurance Requirements</h2>
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <tbody>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50 w-1/3">Bodily Injury (per person)</td>
+              <td class="px-6 py-4 text-gray-700">{s.minBiPerPerson > 0 ? `$${s.minBiPerPerson.toLocaleString()}` : 'Not required'}</td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">Bodily Injury (per accident)</td>
+              <td class="px-6 py-4 text-gray-700">{s.minBiPerAccident > 0 ? `$${s.minBiPerAccident.toLocaleString()}` : 'Not required'}</td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">Property Damage</td>
+              <td class="px-6 py-4 text-gray-700">${s.minPd.toLocaleString()}</td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">PIP Required?</td>
+              <td class="px-6 py-4">
+                {s.pipRequired ? (
+                  <span class="inline-flex items-center gap-1">
+                    <span class="text-green-600 font-semibold">Yes</span>
+                    {s.pipMinimum && <span class="text-gray-500"> &mdash; minimum ${s.pipMinimum.toLocaleString()}</span>}
+                  </span>
+                ) : (
+                  <span class="text-gray-500">No</span>
+                )}
+              </td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">UM/UIM Required?</td>
+              <td class="px-6 py-4">
+                <span class={s.umRequired ? 'text-green-600 font-semibold' : 'text-gray-500'}>{s.umRequired ? 'Yes' : 'No'}</span>
+              </td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">MedPay Required?</td>
+              <td class="px-6 py-4">
+                <span class={s.medpayRequired ? 'text-green-600 font-semibold' : 'text-gray-500'}>{s.medpayRequired ? 'Yes' : 'No (optional)'}</span>
+              </td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">Average Annual Premium</td>
+              <td class="px-6 py-4 text-gray-700">
+                {s.avgAnnualPremium ? `$${s.avgAnnualPremium.toLocaleString()}/year ($${Math.round(s.avgAnnualPremium / 12).toLocaleString()}/month)` : 'N/A'}
+              </td>
+            </tr>
+            <tr>
+              <td class="px-6 py-4 font-semibold text-gray-900 bg-gray-50">Uninsured Motorist Rate</td>
+              <td class="px-6 py-4 text-gray-700">
+                {s.uninsuredRate ? (
+                  <span>
+                    {s.uninsuredRate}%
+                    <span class="text-gray-400 ml-2">(national avg: 15.4%)</span>
+                  </span>
+                ) : 'N/A'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {s.notes && (
+        <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+          <p class="text-sm text-yellow-800"><strong>Note:</strong> {s.notes}</p>
+        </div>
+      )}
+    </section>
+
+    <!-- What to do after a crash in this state -->
+    <section class="mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">After a Car Accident in {s.stateName}</h2>
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="space-y-4">
+          <div>
+            <h3 class="font-semibold text-gray-900">1. Seek medical attention immediately</h3>
+            <p class="text-sm text-gray-600">Even if injuries seem minor, get evaluated. Many car accident injuries (whiplash, concussions, internal bleeding) have delayed symptoms. An ER visit (CPT 99285) averages $608 at Medicare rates but may cost $1,500-$3,000+ through commercial insurance.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">2. File insurance claims</h3>
+            <p class="text-sm text-gray-600">
+              {s.pipRequired
+                ? `In ${s.stateName}, file a PIP claim with your own insurer first. PIP covers up to $${s.pipMinimum?.toLocaleString()} regardless of fault.`
+                : `In ${s.stateName}, you may file a MedPay claim with your own insurer (if you carry it), and file a BI claim against the at-fault driver's insurance.`}
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">3. Document everything</h3>
+            <p class="text-sm text-gray-600">Keep all medical bills, records, and correspondence. Medical costs are the foundation of your injury claim. Use our <a href="/estimator/" class="text-brand-600 hover:underline">cost estimator</a> to verify if your bills are reasonable.</p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-gray-900">4. Consider legal representation</h3>
+            <p class="text-sm text-gray-600">
+              {s.uninsuredRate && s.uninsuredRate > 15
+                ? `With ${s.stateName}'s high uninsured driver rate (${s.uninsuredRate}%), there's a significant chance the at-fault driver has no insurance. An attorney can help you navigate UM/UIM claims and maximize your recovery.`
+                : `An attorney can help negotiate medical liens (often reducing them 30-50%), handle insurance negotiations, and ensure you receive full compensation. Average settlements are 4.4x higher with attorney representation.`}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Medical costs link -->
+    <section class="mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Medical Procedure Costs in {s.stateName}</h2>
+      <p class="text-gray-600 mb-4">
+        Medical costs in {s.stateName} are adjusted by CMS Geographic Practice Cost Indices (GPCI).
+        View Medicare and estimated commercial rates for common car accident procedures in {s.stateName}.
+      </p>
+      <a href={`/states/${s.stateCode.toLowerCase()}/`} class="inline-flex items-center gap-2 px-5 py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors">
+        View {s.stateName} Medical Procedure Costs &rarr;
+      </a>
+    </section>
+
+    <!-- State insurance department -->
+    <section class="mb-10">
+      <h2 class="text-xl font-bold text-gray-900 mb-3">{s.stateName} Insurance Department</h2>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <p class="text-gray-600 mb-3">For official information about auto insurance requirements and consumer complaints in {s.stateName}:</p>
+        <a href={s.insuranceDeptUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-brand-600 font-semibold hover:underline">
+          {s.insuranceDeptName}
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+        </a>
+      </div>
+    </section>
+
+    <!-- Related pages -->
+    <section class="mb-10">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Learn More</h2>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <a href="/car-accident-costs/who-pays/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Who Pays Your Medical Bills?</h3>
+          <p class="text-sm text-gray-500">MedPay vs PIP vs BI explained in detail</p>
+        </a>
+        <a href="/car-accident-costs/self-pay/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Self-Pay After a Crash</h3>
+          <p class="text-sm text-gray-500">Why uninsured victims pay 164% more</p>
+        </a>
+        <a href="/settlement-calculator/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Settlement Calculator</h3>
+          <p class="text-sm text-gray-500">Estimate your claim value</p>
+        </a>
+        <a href="/car-accident-costs/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Car Accident Costs Overview</h3>
+          <p class="text-sm text-gray-500">Payment flowchart and national statistics</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- Nearby states -->
+    <section class="mb-10">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Nearby States</h2>
+      <div class="flex flex-wrap gap-3">
+        {nearbyStates.map(ns => (
+          <a href={`/car-accident-costs/${getStateSlug(ns.stateName)}/`} class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-brand-300 hover:text-brand-600 transition-colors">
+            {ns.stateName} ({faultSystemLabel(ns.faultSystem)})
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <!-- CrashStory CTA -->
+    <CrashStoryCTA
+      heading={`Injured in a Car Accident in ${s.stateName}?`}
+      body={`Find experienced personal injury attorneys in ${s.stateName} who handle car accident cases on contingency. No fee unless you win.`}
+      utmContent={`car-accident-costs-${s.stateCode.toLowerCase()}`}
+      className="mb-12"
+    />
+
+  </div>
+</Base>

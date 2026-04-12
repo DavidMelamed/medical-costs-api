@@ -1,0 +1,410 @@
+---
+import Base from '@/layouts/Base.astro';
+import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
+
+const title = 'Who Pays Your Medical Bills After a Car Accident? | MedicalCosts.info';
+const description = 'Complete guide to who pays medical bills after a car accident: MedPay, PIP, health insurance, medical liens, BI claims, and what happens when you are uninsured.';
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Who pays my medical bills after a car accident?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Medical bills after a car accident are paid in a specific priority order: (1) MedPay or PIP coverage pays first regardless of fault, (2) health insurance acts as secondary payer, (3) medical liens/Letters of Protection defer payment to settlement, and (4) the at-fault driver's bodily injury (BI) liability insurance pays through settlement. If the at-fault driver is uninsured, your UM/UIM coverage fills the gap."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the difference between MedPay and PIP?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "MedPay (Medical Payments Coverage) covers only medical expenses after a car accident, with typical limits of $2,000 to $25,000. PIP (Personal Injury Protection) is broader, covering medical expenses plus lost wages, rehabilitation, and household services. PIP is required in 12 states, while MedPay is optional in most states (required only in Maine). MedPay insurers have subrogation rights; PIP insurers generally do not."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if I have no health insurance after a car accident?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "If you have no health insurance after a car accident, you may be billed at hospital chargemaster rates, which are on average 164% higher than negotiated insurance rates. However, if you have an attorney, they can issue a Letter of Protection (LOP) to medical providers, allowing treatment on a deferred-payment basis pending your settlement. The No Surprises Act also provides some protections for emergency care."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is a Letter of Protection (LOP)?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A Letter of Protection (LOP) is a document issued by a personal injury attorney to medical providers guaranteeing payment from a future settlement. It allows uninsured or underinsured crash victims to receive medical treatment without upfront payment. Providers treat the patient and file a medical lien against the case. After settlement, liens are paid before the client receives remaining funds. Attorneys commonly negotiate lien amounts down by 30-50%."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is subrogation in car accident cases?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Subrogation is the right of an insurance company to seek reimbursement from the at-fault party after paying your claim. For example, if your health insurance pays $50,000 in medical bills from a car accident, they can demand repayment from your personal injury settlement. MedPay, health insurance, workers' comp, and Medicare/Medicaid all have subrogation rights. PIP generally does not. Subrogation can significantly reduce your net settlement proceeds."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What percentage of drivers are uninsured?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Nationally, 15.4% of drivers are uninsured according to 2023 IRC data. The rate varies dramatically by state: Mississippi has the highest rate at 28.2%, followed by Washington D.C. (25.2%) and New Mexico (24.9%). Maine has the lowest at 5.7%. In states with high uninsured rates, crash victims are more likely to face coverage gaps and higher out-of-pocket medical costs."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does workers' compensation cover car accidents?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Workers' compensation covers car accidents that occur while driving for work-related purposes (deliveries, business travel, rideshare driving, trucking), but NOT regular commuting. It is a no-fault system, so it covers you even if you caused the accident (unless under the influence). You can file both a workers' comp claim AND a personal injury claim against the at-fault driver. Workers' comp covers medical bills and wage replacement but NOT pain and suffering."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How much does a car accident ER visit cost?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A high-complexity ER visit (CPT 99285) has a Medicare facility rate of approximately $608, but total ER bills after a car accident typically range from $1,500 to $10,000+ depending on imaging (CT scans, MRIs), procedures, lab work, and observation time. Commercial insurance rates are typically 150-250% of Medicare rates. Uninsured patients may be billed at chargemaster rates, which can be 2-5x higher than what insurers pay."
+      }
+    },
+  ]
+};
+---
+
+<Base title={title} description={description} canonical="/car-accident-costs/who-pays/" schema={faqSchema}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/car-accident-costs/" class="hover:text-brand-600">Car Accident Costs</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Who Pays?</span>
+    </nav>
+
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Who Pays Your Medical Bills After a Car Accident?</h1>
+    <p class="text-lg text-gray-600 mb-10">
+      After a car accident, multiple insurance layers may cover your medical bills. The payment hierarchy depends on
+      your state, your coverage, and who caused the crash. Here is a complete breakdown.
+    </p>
+
+    <!-- Table of contents -->
+    <div class="bg-gray-50 rounded-xl border border-gray-200 p-6 mb-12">
+      <h2 class="font-bold text-gray-900 mb-3">In This Guide</h2>
+      <ol class="list-decimal list-inside space-y-1.5 text-sm text-brand-600">
+        <li><a href="#medpay" class="hover:underline">MedPay (Medical Payments Coverage)</a></li>
+        <li><a href="#pip" class="hover:underline">PIP (Personal Injury Protection)</a></li>
+        <li><a href="#medpay-vs-pip" class="hover:underline">MedPay vs PIP Comparison</a></li>
+        <li><a href="#health-insurance" class="hover:underline">Health Insurance as Secondary Payer</a></li>
+        <li><a href="#bi" class="hover:underline">Bodily Injury Liability (BI)</a></li>
+        <li><a href="#um-uim" class="hover:underline">Uninsured/Underinsured Motorist (UM/UIM)</a></li>
+        <li><a href="#uninsured" class="hover:underline">What Happens When You're Uninsured</a></li>
+        <li><a href="#liens" class="hover:underline">Medical Liens &amp; Letters of Protection</a></li>
+        <li><a href="#subrogation" class="hover:underline">How Subrogation Works</a></li>
+        <li><a href="#workers-comp" class="hover:underline">Workers' Compensation</a></li>
+      </ol>
+    </div>
+
+    <!-- Section 1: MedPay -->
+    <section id="medpay" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">1. MedPay (Medical Payments Coverage)</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>MedPay is an optional add-on to auto insurance that pays medical bills after a car accident <strong>regardless of fault</strong>. No liability investigation is needed, so payment is fast &mdash; typically within days.</p>
+
+        <div class="bg-green-50 rounded-xl p-5 border border-green-200 not-prose mb-4">
+          <h3 class="font-bold text-green-900 mb-2">Key MedPay Facts</h3>
+          <ul class="space-y-1.5 text-sm text-green-800">
+            <li><strong>Primary payer:</strong> Medical providers bill MedPay first</li>
+            <li><strong>No deductible, no copay</strong></li>
+            <li><strong>Per-person limits:</strong> $1,000 - $100,000 (most popular: $5,000)</li>
+            <li><strong>Cost:</strong> Under $10/month to add. Upgrading $2K to $10K costs ~$10/year</li>
+            <li><strong>Required only in Maine</strong> (minimum $2,000/person)</li>
+            <li><strong>Subrogation:</strong> Yes &mdash; MedPay insurers CAN seek reimbursement from at-fault party</li>
+          </ul>
+        </div>
+
+        <p><strong>What MedPay covers:</strong> Hospital/ER bills, doctor visits, surgery, X-rays, diagnostics, ambulance transport, dental work from injury, and funeral expenses (some policies).</p>
+
+        <p><strong>What MedPay does NOT cover:</strong> Lost wages, household services, pain and suffering.</p>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden not-prose mt-4">
+          <h4 class="px-5 py-3 bg-gray-50 font-semibold text-sm text-gray-700 border-b">Typical MedPay Limits</h4>
+          <table class="w-full text-sm">
+            <tbody>
+              <tr class="border-b border-gray-100"><td class="px-5 py-2.5">$1,000</td><td class="px-5 py-2.5 text-gray-500">Bare minimum, common on budget policies</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-2.5">$2,000</td><td class="px-5 py-2.5 text-gray-500">Common default</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-2.5 font-semibold">$5,000</td><td class="px-5 py-2.5 text-gray-500">Most popular selection</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-2.5">$10,000</td><td class="px-5 py-2.5 text-gray-500">Recommended for most drivers</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-2.5">$25,000</td><td class="px-5 py-2.5 text-gray-500">Higher-end standard option</td></tr>
+              <tr><td class="px-5 py-2.5">$50,000 - $100,000</td><td class="px-5 py-2.5 text-gray-500">Available from some insurers</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: PIP -->
+    <section id="pip" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">2. PIP (Personal Injury Protection)</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>PIP is a broader no-fault coverage that pays medical expenses, lost wages, and other economic losses regardless of who caused the accident. Required in 12 states.</p>
+
+        <div class="bg-blue-50 rounded-xl p-5 border border-blue-200 not-prose mb-4">
+          <h3 class="font-bold text-blue-900 mb-2">States Requiring PIP</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-blue-800">
+            <div>Delaware ($15K)</div>
+            <div>Florida ($10K)*</div>
+            <div>Hawaii ($10K)</div>
+            <div>Kansas ($4,500)</div>
+            <div>Kentucky ($10K)**</div>
+            <div>Massachusetts ($8K)</div>
+            <div>Michigan (tiered)</div>
+            <div>Minnesota ($40K)</div>
+            <div>New Jersey ($15K)**</div>
+            <div>New York ($50K)</div>
+            <div>North Dakota ($30K)</div>
+            <div>Oregon ($15K)</div>
+            <div>Utah ($3K)</div>
+          </div>
+          <p class="text-xs text-blue-600 mt-3">*Florida repealing PIP July 1, 2026. **Choice states.</p>
+        </div>
+
+        <p><strong>What PIP covers (broader than MedPay):</strong></p>
+        <ul>
+          <li>Medical expenses (typically 80% of reasonable/necessary costs)</li>
+          <li>Lost wages (typically 60% of lost income)</li>
+          <li>Rehabilitation expenses</li>
+          <li>In-home care and household services</li>
+          <li>Funeral expenses and survivor/death benefits</li>
+        </ul>
+
+        <p><strong>Key difference from MedPay:</strong> PIP generally does NOT have subrogation rights, meaning the insurer cannot seek reimbursement from the at-fault party.</p>
+      </div>
+    </section>
+
+    <!-- Section 3: Comparison -->
+    <section id="medpay-vs-pip" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">3. MedPay vs PIP: Side-by-Side Comparison</h2>
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+              <th class="px-5 py-3 text-left font-semibold text-gray-700">Feature</th>
+              <th class="px-5 py-3 text-left font-semibold text-gray-700">MedPay</th>
+              <th class="px-5 py-3 text-left font-semibold text-gray-700">PIP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Covers medical bills</td><td class="px-5 py-3 text-green-600">Yes</td><td class="px-5 py-3 text-green-600">Yes</td></tr>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Covers lost wages</td><td class="px-5 py-3 text-red-500">No</td><td class="px-5 py-3 text-green-600">Yes (60%)</td></tr>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Covers rehab/household</td><td class="px-5 py-3 text-red-500">No</td><td class="px-5 py-3 text-green-600">Yes</td></tr>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Fault required?</td><td class="px-5 py-3">No</td><td class="px-5 py-3">No</td></tr>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Subrogation rights</td><td class="px-5 py-3 text-amber-600">Yes (most states)</td><td class="px-5 py-3 text-green-600">No (generally)</td></tr>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Typical limits</td><td class="px-5 py-3">$2K - $25K</td><td class="px-5 py-3">$3K - $50K</td></tr>
+            <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Required states</td><td class="px-5 py-3">Maine only</td><td class="px-5 py-3">12 states</td></tr>
+            <tr><td class="px-5 py-3 font-medium">Cost</td><td class="px-5 py-3">Under $10/month</td><td class="px-5 py-3">Included in premium</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 4: Health Insurance -->
+    <section id="health-insurance" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">4. Health Insurance as Secondary Payer</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>Auto insurance (PIP/MedPay) pays first. Health insurance becomes the <strong>secondary payer</strong> once auto coverage limits are exhausted.</p>
+
+        <div class="bg-amber-50 rounded-xl p-5 border border-amber-200 not-prose">
+          <h3 class="font-bold text-amber-900 mb-2">Important: Subrogation</h3>
+          <p class="text-sm text-amber-800">Health insurers typically have subrogation clauses allowing them to seek reimbursement from your personal injury settlement. This means they may demand repayment of medical bills they paid, reducing your net settlement proceeds. This can be negotiated by your attorney.</p>
+        </div>
+
+        <h3>Payment Priority by State Type</h3>
+        <p><strong>No-fault states:</strong> PIP is primary. Health insurance is secondary.</p>
+        <p><strong>At-fault states:</strong> MedPay (if available) is primary. Health insurance is secondary. The at-fault driver's BI coverage pays through settlement.</p>
+      </div>
+    </section>
+
+    <!-- Section 5: BI -->
+    <section id="bi" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">5. Bodily Injury Liability (BI)</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>The at-fault driver's BI coverage pays for the other party's medical bills, lost wages, and pain/suffering. This is the primary way injured parties recover compensation in at-fault/tort states (the majority of US states).</p>
+
+        <p>The average BI claim payout is approximately <strong>$29,400</strong> (2026 estimate), up 81% since 2016.</p>
+
+        <h3>How BI Claims Work</h3>
+        <ol>
+          <li>Injured party files claim against at-fault driver's insurance</li>
+          <li>Insurance adjuster investigates liability and damages</li>
+          <li>Medical bills, lost wages, and pain/suffering are calculated</li>
+          <li>Negotiation between adjuster and claimant (or their attorney)</li>
+          <li>Settlement or lawsuit</li>
+          <li>Payment from at-fault driver's BI policy up to policy limits</li>
+        </ol>
+
+        <div class="bg-red-50 rounded-xl p-5 border border-red-200 not-prose">
+          <h3 class="font-bold text-red-900 mb-2">Key Limitation</h3>
+          <p class="text-sm text-red-800">BI only pays up to the at-fault driver's policy limits. If your medical bills exceed those limits ($25,000 per person in most states), you must pursue other sources: UM/UIM, health insurance, or a lawsuit against the driver personally.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 6: UM/UIM -->
+    <section id="um-uim" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">6. Uninsured/Underinsured Motorist Coverage (UM/UIM)</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>UM/UIM protects you when the at-fault driver has <strong>no insurance</strong> (UM) or <strong>insufficient insurance</strong> (UIM) to cover your damages.</p>
+
+        <ul>
+          <li><strong>UMBI:</strong> Covers medical bills for you and passengers when at-fault driver is uninsured</li>
+          <li><strong>UMPD:</strong> Covers vehicle damage from uninsured at-fault driver</li>
+        </ul>
+
+        <p>About half of all states require UM/UIM coverage. Average cost: ~$199/year nationally.</p>
+
+        <p><strong>How it works:</strong> If the at-fault driver has no insurance, file directly under your UM coverage. If they have insufficient insurance, file against their insurance first; once their limits are exhausted, file under your UIM for the remainder.</p>
+      </div>
+    </section>
+
+    <!-- Section 7: Uninsured -->
+    <section id="uninsured" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">7. What Happens When You're Uninsured</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>An estimated <strong>15.4% of drivers</strong> (about 1 in 6.5) are uninsured nationally. If you're injured and the at-fault driver has no insurance:</p>
+
+        <div class="bg-red-50 rounded-xl p-5 border border-red-200 not-prose mb-4">
+          <h3 class="font-bold text-red-900 mb-3">States with Highest Uninsured Rates</h3>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div class="flex justify-between"><span>Mississippi</span><span class="font-bold text-red-700">28.2%</span></div>
+            <div class="flex justify-between"><span>Washington D.C.</span><span class="font-bold text-red-700">25.2%</span></div>
+            <div class="flex justify-between"><span>New Mexico</span><span class="font-bold text-red-700">24.9%</span></div>
+            <div class="flex justify-between"><span>Tennessee</span><span class="font-bold text-red-700">20.9%</span></div>
+            <div class="flex justify-between"><span>Florida</span><span class="font-bold text-red-700">20.4%</span></div>
+            <div class="flex justify-between"><span>Michigan</span><span class="font-bold text-red-700">19.6%</span></div>
+          </div>
+        </div>
+
+        <h3>Your options without insurance</h3>
+        <ol>
+          <li><strong>UM/UIM coverage</strong> (if you carry it) pays your medical bills and damages</li>
+          <li><strong>Letter of Protection</strong> from an attorney allows treatment now, payment from settlement later</li>
+          <li><strong>Hospital financial assistance</strong> programs (most non-profit hospitals are required to offer them)</li>
+          <li><strong>Medicaid</strong> if you qualify (has mandatory subrogation &mdash; federal super-lien)</li>
+          <li><strong>Negotiate</strong> directly with hospitals for reduced self-pay rates</li>
+          <li><strong>Lawsuit</strong> against the uninsured at-fault driver personally (difficult to collect)</li>
+        </ol>
+
+        <p>Without insurance, hospitals may bill you at <strong>chargemaster rates</strong>, which are on average 164% higher than negotiated insurance rates. See our <a href="/car-accident-costs/self-pay/">self-pay guide</a> for how to negotiate these bills down.</p>
+      </div>
+    </section>
+
+    <!-- Section 8: Medical Liens -->
+    <section id="liens" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">8. Medical Liens &amp; Letters of Protection</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>When the injured person has no insurance or insufficient coverage, and an attorney is involved, medical providers can treat on a deferred-payment basis using a <strong>Letter of Protection (LOP)</strong>.</p>
+
+        <h3>How the LOP Process Works</h3>
+        <ol>
+          <li>Injured person retains a personal injury attorney</li>
+          <li>Attorney issues a Letter of Protection to medical providers</li>
+          <li>LOP guarantees payment from the eventual settlement</li>
+          <li>Providers treat the patient without upfront payment</li>
+          <li>Provider files a medical lien against the case</li>
+          <li>After settlement, medical liens are paid before the client receives remaining funds</li>
+        </ol>
+
+        <div class="bg-purple-50 rounded-xl p-5 border border-purple-200 not-prose">
+          <h3 class="font-bold text-purple-900 mb-2">Lien Negotiation</h3>
+          <p class="text-sm text-purple-800">Attorneys commonly negotiate medical liens down by <strong>30-50%</strong>. This is standard practice and an important way clients receive more net compensation. Medical lien amounts are often based on chargemaster rates, which gives significant room for negotiation.</p>
+        </div>
+
+        <p><strong>Risk:</strong> Even if the case is lost or settles for less than expected, the patient may still owe the full billed amount to the provider. LOPs are not risk-free.</p>
+      </div>
+    </section>
+
+    <!-- Section 9: Subrogation -->
+    <section id="subrogation" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">9. How Subrogation Works</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>Subrogation is the right of an insurance company to seek reimbursement from the at-fault party after paying your medical bills. It directly affects how much of your settlement you keep.</p>
+
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden not-prose">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="px-5 py-3 text-left font-semibold text-gray-700">Payer Type</th>
+                <th class="px-5 py-3 text-left font-semibold text-gray-700">Subrogation Rights?</th>
+                <th class="px-5 py-3 text-left font-semibold text-gray-700">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">MedPay</td><td class="px-5 py-3 text-amber-600">Yes (most states)</td><td class="px-5 py-3 text-gray-500">Can seek reimbursement from at-fault party</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">PIP</td><td class="px-5 py-3 text-green-600">No (generally)</td><td class="px-5 py-3 text-gray-500">No right to seek reimbursement</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Health Insurance</td><td class="px-5 py-3 text-amber-600">Yes</td><td class="px-5 py-3 text-gray-500">Can claim reimbursement from settlement</td></tr>
+              <tr class="border-b border-gray-100"><td class="px-5 py-3 font-medium">Workers' Comp</td><td class="px-5 py-3 text-amber-600">Yes</td><td class="px-5 py-3 text-gray-500">Can subrogate against at-fault party</td></tr>
+              <tr><td class="px-5 py-3 font-medium">Medicare/Medicaid</td><td class="px-5 py-3 text-red-600 font-semibold">Yes (mandatory)</td><td class="px-5 py-3 text-gray-500">Federal super-lien; must be repaid</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 10: Workers' Comp -->
+    <section id="workers-comp" class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">10. Workers' Compensation (Work-Related Crashes)</h2>
+      <div class="prose prose-gray max-w-none">
+        <p>If the crash occurred while driving for <strong>work-related purposes</strong> (not commuting), workers' compensation may cover your medical bills and lost wages.</p>
+
+        <ul>
+          <li><strong>No-fault system:</strong> No need to prove the other driver caused it</li>
+          <li><strong>Covers even if you were at fault</strong> (unless under the influence)</li>
+          <li><strong>Does NOT cover regular commuting</strong></li>
+          <li><strong>Can file both</strong> a workers' comp claim AND a personal injury claim against the at-fault driver</li>
+          <li><strong>Covers:</strong> Medical bills, wage replacement, rehabilitation</li>
+          <li><strong>Does NOT cover:</strong> Pain and suffering (unlike BI claims)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CrashStory CTA -->
+    <CrashStoryCTA
+      heading="Need Help Navigating Car Accident Insurance?"
+      body="An experienced personal injury attorney can help you understand your coverage options, negotiate medical liens, and maximize your settlement. Average settlements are 4.4x higher with attorney representation."
+      utmContent="who-pays-explainer"
+      className="mb-12"
+    />
+
+    <!-- Related links -->
+    <section class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Related Guides</h2>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <a href="/car-accident-costs/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Car Accident Costs Overview</h3>
+          <p class="text-sm text-gray-500">Payment flowchart, injury costs, state rules</p>
+        </a>
+        <a href="/car-accident-costs/self-pay/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Self-Pay After a Crash</h3>
+          <p class="text-sm text-gray-500">Chargemaster rates, bill negotiation, No Surprises Act</p>
+        </a>
+        <a href="/settlement-calculator/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Settlement Calculator</h3>
+          <p class="text-sm text-gray-500">Estimate your injury claim value</p>
+        </a>
+        <a href="/estimator/" class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="font-semibold text-gray-900">Medical Cost Estimator</h3>
+          <p class="text-sm text-gray-500">Look up any procedure cost by CPT code</p>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</Base>

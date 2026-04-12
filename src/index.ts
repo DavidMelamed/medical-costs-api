@@ -88,8 +88,21 @@ export default {
       if (path === "/api/search") return handleUnifiedSearch(url, env, cors);
       if (path === "/api/body-systems") return handleBodySystems(env, cors);
       if (path === "/api/hospitals") return handleHospitals(url, env, cors);
+      if (path === "/api/hospitals/rankings") return handleHospitalRankings(url, env, cors);
+      if (path === "/api/hospitals/states") return handleHospitalStates(env, cors);
+      if (path === "/api/insurers") return handleInsurers(url, env, cors);
       if (path === "/api/trends") return handleTrends(env, cors);
       if (path === "/api/negotiated-rates") return handleNegotiatedRates(url, env, cors);
+      if (path === "/api/bill-check") return handleBillCheck(url, env, cors);
+      if (path === "/api/drugs/compare") return handleDrugCompare(url, env, cors);
+      if (path === "/api/drugs/categories") return handleDrugCategories(env, cors);
+      if (path === "/api/drugs/glp1") return handleGlp1Drugs(env, cors);
+      if (path === "/api/insurance-plans") return handleInsurancePlans(url, env, cors);
+      if (path === "/api/oop-calculator") return handleOopCalculator(url, env, cors);
+
+      // Auto insurance by state
+      const autoInsMatch = path.match(/^\/api\/auto-insurance\/([a-zA-Z]{2})$/);
+      if (autoInsMatch) return handleAutoInsurance(autoInsMatch[1].toUpperCase(), env, cors);
 
       // Body system detail
       const bodySystemMatch = path.match(/^\/api\/body-systems\/([^/]+)$/);
@@ -127,6 +140,10 @@ export default {
 
       const injuryMatch = path.match(/^\/api\/injuries\/([^/]+)$/);
       if (injuryMatch) return handleInjuryDetail(decodeURIComponent(injuryMatch[1]), env, cors);
+
+      // Hospital state DRGs
+      const hospitalStateDrgsMatch = path.match(/^\/api\/hospitals\/([A-Z]{2})\/drgs$/);
+      if (hospitalStateDrgsMatch) return handleHospitalStateDrgs(hospitalStateDrgsMatch[1], url, env, cors);
 
       return error("Not found", 404, cors);
     } catch (e: unknown) {
@@ -168,8 +185,16 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/related/:code",
         "GET /api/search?q=term",
         "GET /api/hospitals?state=CO&drg=470",
+        "GET /api/hospitals/rankings?metric=charges&limit=10",
+        "GET /api/hospitals/states",
+        "GET /api/hospitals/:state/drgs",
+        "GET /api/insurers",
         "GET /api/trends",
         "GET /api/negotiated-rates?code=99285",
+        "GET /api/bill-check?code=99285&amount=2500&state=CO",
+        "GET /api/drugs/compare?brand=ozempic",
+        "GET /api/drugs/categories",
+        "GET /api/drugs/glp1",
       ],
     },
     cors,
@@ -1370,7 +1395,7 @@ async function handleHospitals(url: URL, env: Env, cors: Record<string, string>)
   const drg = url.searchParams.get("drg");
   const provider = url.searchParams.get("provider");
   const search = url.searchParams.get("search");
-  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 500);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
   const sort = url.searchParams.get("sort") || "charges_desc";
 
@@ -1463,6 +1488,162 @@ async function handleHospitals(url: URL, env: Env, cors: Record<string, string>)
     ...(summary ? { summary } : {}),
     disclaimer: "Hospital charges reflect list prices before insurance negotiations. Actual patient costs depend on insurance, deductibles, and negotiated rates.",
   });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals/rankings — National hospital rankings
+// ---------------------------------------------------------------------------
+
+async function handleHospitalRankings(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const metric = url.searchParams.get("metric") || "charges";
+  const direction = url.searchParams.get("direction") || "desc";
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "10", 10) || 10, 1), 100);
+
+  const orderMap: Record<string, string> = {
+    charges: "avgCharges",
+    payments: "avgPayments",
+    markup: "avgMarkup",
+    discharges: "totalDischarges",
+    value: "avgMarkup",
+  };
+  const orderCol = orderMap[metric] || "avgCharges";
+  const dir = direction === "asc" ? "ASC" : "DESC";
+  const actualDir = metric === "value" ? "ASC" : dir;
+
+  const { results } = await env.DB.prepare(`
+    SELECT
+      provider_ccn AS providerCcn,
+      provider_name AS providerName,
+      provider_city AS providerCity,
+      provider_state AS providerState,
+      COUNT(DISTINCT drg_code) AS drgCount,
+      SUM(total_discharges) AS totalDischarges,
+      ROUND(AVG(avg_covered_charges), 2) AS avgCharges,
+      ROUND(AVG(avg_total_payments), 2) AS avgPayments,
+      ROUND(AVG(avg_medicare_payments), 2) AS avgMedicare,
+      ROUND(AVG(CASE WHEN avg_total_payments > 0 THEN avg_covered_charges / avg_total_payments ELSE NULL END), 2) AS avgMarkup
+    FROM hospital_drg_costs
+    GROUP BY provider_ccn
+    HAVING COUNT(*) >= 5
+    ORDER BY ${orderCol} ${actualDir}
+    LIMIT ?1
+  `).bind(limit).all();
+
+  const stats = await env.DB.prepare(`
+    SELECT
+      COUNT(DISTINCT provider_ccn) AS totalHospitals,
+      COUNT(DISTINCT provider_state) AS totalStates,
+      COUNT(DISTINCT drg_code) AS totalDrgs,
+      COUNT(*) AS totalRecords,
+      SUM(total_discharges) AS totalDischarges,
+      ROUND(AVG(avg_covered_charges), 2) AS nationalAvgCharges,
+      ROUND(AVG(avg_total_payments), 2) AS nationalAvgPayments,
+      ROUND(AVG(avg_medicare_payments), 2) AS nationalAvgMedicare
+    FROM hospital_drg_costs
+  `).first();
+
+  return success({ rankings: results, national: stats }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals/states — All states with hospital counts
+// ---------------------------------------------------------------------------
+
+async function handleHospitalStates(env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results } = await env.DB.prepare(`
+    SELECT
+      provider_state AS state,
+      COUNT(DISTINCT provider_ccn) AS hospitalCount,
+      COUNT(DISTINCT drg_code) AS drgCount,
+      SUM(total_discharges) AS totalDischarges,
+      ROUND(AVG(avg_covered_charges), 2) AS avgCharges,
+      ROUND(AVG(avg_total_payments), 2) AS avgPayments,
+      ROUND(AVG(CASE WHEN avg_total_payments > 0 THEN avg_covered_charges / avg_total_payments ELSE NULL END), 2) AS avgMarkup
+    FROM hospital_drg_costs
+    GROUP BY provider_state
+    ORDER BY provider_state ASC
+  `).all();
+
+  return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals/:state/drgs — DRGs available in a state
+// ---------------------------------------------------------------------------
+
+async function handleHospitalStateDrgs(state: string, url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 1), 534);
+
+  const { results } = await env.DB.prepare(`
+    SELECT
+      drg_code AS drgCode,
+      drg_description AS drgDescription,
+      COUNT(DISTINCT provider_ccn) AS hospitalCount,
+      SUM(total_discharges) AS totalDischarges,
+      ROUND(AVG(avg_covered_charges), 2) AS avgCharges,
+      ROUND(AVG(avg_total_payments), 2) AS avgPayments,
+      ROUND(AVG(avg_medicare_payments), 2) AS avgMedicare,
+      ROUND(MIN(avg_covered_charges), 2) AS minCharges,
+      ROUND(MAX(avg_covered_charges), 2) AS maxCharges
+    FROM hospital_drg_costs
+    WHERE provider_state = ?1
+    GROUP BY drg_code
+    ORDER BY SUM(total_discharges) DESC
+    LIMIT ?2
+  `).bind(state.toUpperCase(), limit).all();
+
+  return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/insurers — Insurance company report card
+// ---------------------------------------------------------------------------
+
+async function handleInsurers(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
+
+  const { results: payers } = await env.DB.prepare(`
+    SELECT
+      payer_name AS payerName,
+      COUNT(*) AS totalRates,
+      COUNT(DISTINCT code) AS proceduresCovered,
+      COUNT(DISTINCT hospital_name) AS hospitalCount,
+      COUNT(DISTINCT hospital_state) AS stateCount,
+      ROUND(AVG(negotiated_rate), 2) AS avgRate,
+      ROUND(MIN(negotiated_rate), 2) AS minRate,
+      ROUND(MAX(negotiated_rate), 2) AS maxRate
+    FROM hospital_negotiated_rates
+    WHERE negotiated_rate > 0
+    GROUP BY payer_name
+    HAVING COUNT(*) >= 10
+    ORDER BY COUNT(*) DESC
+    LIMIT ?1
+  `).bind(limit).all();
+
+  const stats = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS totalRates,
+      COUNT(DISTINCT payer_name) AS totalPayers,
+      COUNT(DISTINCT hospital_name) AS totalHospitals,
+      COUNT(DISTINCT hospital_state) AS totalStates,
+      ROUND(AVG(negotiated_rate), 2) AS overallAvgRate,
+      ROUND(MIN(negotiated_rate), 2) AS overallMinRate,
+      ROUND(MAX(negotiated_rate), 2) AS overallMaxRate
+    FROM hospital_negotiated_rates
+    WHERE negotiated_rate > 0
+  `).first();
+
+  const medicareBaseline = await env.DB.prepare(`
+    SELECT ROUND(AVG(avg_medicare_payments), 2) AS avgMedicarePayment
+    FROM hospital_drg_costs
+  `).first();
+
+  return success({
+    payers,
+    summary: stats,
+    medicareBaseline,
+    disclaimer: "Insurance rates shown are from hospital Machine-Readable Files (MRFs). Rates vary by plan, network tier, and specific contract terms."
+  }, cors);
 }
 
 // ---------------------------------------------------------------------------
@@ -1992,4 +2173,573 @@ async function handleNegotiatedRates(url: URL, env: Env, cors: Record<string, st
       "Rates reflect specific hospital-payer contracts and may not represent what you will pay. " +
       "Your actual cost depends on your specific insurance plan, deductible, and out-of-pocket maximum.",
   }, cors, { source: "Hospital Price Transparency MRFs (CMS mandate)" });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/bill-check — Is This Bill Reasonable?
+// ---------------------------------------------------------------------------
+
+async function handleBillCheck(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const code = url.searchParams.get("code");
+  const amountStr = url.searchParams.get("amount");
+  const state = url.searchParams.get("state");
+
+  if (!code || !amountStr) {
+    return error("Required parameters: code (CPT/HCPCS), amount (billed amount in dollars)", 400, cors);
+  }
+
+  const billedAmount = parseFloat(amountStr);
+  if (isNaN(billedAmount) || billedAmount <= 0) {
+    return error("Invalid amount — must be a positive number", 400, cors);
+  }
+
+  // 1. Get procedure details (Medicare rates)
+  const { results: procResults } = await env.DB.prepare(`
+    SELECT
+      code, description, category, body_system AS bodySystem,
+      national_facility_rate AS nationalFacilityRate,
+      national_non_fac_rate AS nationalNonFacRate,
+      hospital_outpatient_cost AS hospitalOutpatientCost,
+      asc_cost AS ascCost,
+      total_rvu AS totalRvu,
+      conversion_factor AS conversionFactor
+    FROM medical_procedures
+    WHERE code = ?1 AND code_type IN ('CPT', 'HCPCS')
+    ORDER BY effective_year DESC
+    LIMIT 1
+  `).bind(code).all();
+
+  if (!procResults || procResults.length === 0) {
+    return error(`Procedure not found: ${code}`, 404, cors);
+  }
+
+  const proc = procResults[0] as Record<string, unknown>;
+  const medicareRate = (proc.nationalFacilityRate as number) || (proc.nationalNonFacRate as number) || null;
+  const oppsRate = (proc.hospitalOutpatientCost as number) || null;
+  const nonFacRate = (proc.nationalNonFacRate as number) || null;
+
+  // 2. Get geographic rate if state provided
+  let stateRate: number | null = null;
+  let stateCommercialLow: number | null = null;
+  let stateCommercialHigh: number | null = null;
+  if (state) {
+    const { results: geoResults } = await env.DB.prepare(`
+      SELECT
+        facility_rate AS facilityRate,
+        non_facility_rate AS nonFacilityRate,
+        estimated_commercial_low AS commercialLow,
+        estimated_commercial_high AS commercialHigh
+      FROM medical_cost_geographic g
+      JOIN medical_procedures p ON g.procedure_id = p.id
+      WHERE p.code = ?1 AND g.state_code = ?2
+      ORDER BY g.effective_year DESC
+      LIMIT 1
+    `).bind(code, state).all();
+
+    if (geoResults && geoResults.length > 0) {
+      const geo = geoResults[0] as Record<string, unknown>;
+      stateRate = (geo.facilityRate as number) || (geo.nonFacilityRate as number) || null;
+      stateCommercialLow = (geo.commercialLow as number) || null;
+      stateCommercialHigh = (geo.commercialHigh as number) || null;
+    }
+  }
+
+  // 3. Get negotiated rate stats
+  let negotiatedMin: number | null = null;
+  let negotiatedMax: number | null = null;
+  let negotiatedAvg: number | null = null;
+  let negotiatedCount = 0;
+
+  const negQuery = state
+    ? `SELECT COUNT(*) AS cnt, MIN(negotiated_rate) AS minR, MAX(negotiated_rate) AS maxR, AVG(negotiated_rate) AS avgR FROM hospital_negotiated_rates WHERE code = ?1 AND hospital_state = ?2`
+    : `SELECT COUNT(*) AS cnt, MIN(negotiated_rate) AS minR, MAX(negotiated_rate) AS maxR, AVG(negotiated_rate) AS avgR FROM hospital_negotiated_rates WHERE code = ?1`;
+
+  const negParams = state ? [code, state] : [code];
+  const { results: negResults } = await env.DB.prepare(negQuery).bind(...negParams).all();
+
+  if (negResults && negResults.length > 0) {
+    const neg = negResults[0] as Record<string, unknown>;
+    negotiatedCount = (neg.cnt as number) || 0;
+    if (negotiatedCount > 0) {
+      negotiatedMin = Math.round((neg.minR as number) * 100) / 100;
+      negotiatedMax = Math.round((neg.maxR as number) * 100) / 100;
+      negotiatedAvg = Math.round((neg.avgR as number) * 100) / 100;
+    }
+  }
+
+  // 4. Compute percentile among negotiated rates
+  let percentile: number | null = null;
+  if (negotiatedCount > 0) {
+    const { results: pctResults } = await env.DB.prepare(
+      state
+        ? `SELECT COUNT(*) AS below FROM hospital_negotiated_rates WHERE code = ?1 AND hospital_state = ?2 AND negotiated_rate <= ?3`
+        : `SELECT COUNT(*) AS below FROM hospital_negotiated_rates WHERE code = ?1 AND negotiated_rate <= ?2`
+    ).bind(...(state ? [code, state, billedAmount] : [code, billedAmount])).all();
+
+    if (pctResults && pctResults.length > 0) {
+      const below = (pctResults[0] as Record<string, unknown>).below as number;
+      percentile = Math.round((below / negotiatedCount) * 100);
+    }
+  }
+
+  // 5. Compute fair price range (150-250% of Medicare)
+  const fairPriceLow = medicareRate ? Math.round(medicareRate * 1.5) : null;
+  const fairPriceHigh = medicareRate ? Math.round(medicareRate * 2.5) : null;
+
+  // 6. Compute commercial estimate (use state-specific or national 200% of Medicare)
+  const commercialAvg = stateCommercialLow && stateCommercialHigh
+    ? Math.round((stateCommercialLow + stateCommercialHigh) / 2)
+    : negotiatedAvg
+      ? Math.round(negotiatedAvg)
+      : medicareRate
+        ? Math.round(medicareRate * 2.0)
+        : null;
+
+  // 7. Verdict
+  const referenceRate = commercialAvg || fairPriceHigh || medicareRate;
+  let verdictText = "";
+  let verdictLevel: "low" | "fair" | "high" | "very_high" = "fair";
+  let percentAbove = 0;
+
+  if (referenceRate && referenceRate > 0) {
+    percentAbove = Math.round(((billedAmount - referenceRate) / referenceRate) * 100);
+
+    if (billedAmount <= referenceRate * 0.8) {
+      verdictText = `Your bill is ${Math.abs(percentAbove)}% below the average commercial rate. This is a good price.`;
+      verdictLevel = "low";
+    } else if (billedAmount <= referenceRate * 1.2) {
+      verdictText = `Your bill is within the normal range (within 20% of the average commercial rate).`;
+      verdictLevel = "fair";
+    } else if (billedAmount <= referenceRate * 2.0) {
+      verdictText = `Your bill is ${percentAbove}% above the average commercial rate. You may want to negotiate.`;
+      verdictLevel = "high";
+    } else {
+      verdictText = `Your bill is ${percentAbove}% above the average commercial rate. This is significantly higher than typical. We strongly recommend negotiating.`;
+      verdictLevel = "very_high";
+    }
+  }
+
+  return success({
+    code,
+    description: proc.description,
+    category: proc.category,
+    billedAmount,
+    state: state || null,
+    medicareRate,
+    nonFacilityRate: nonFacRate,
+    hospitalOutpatientRate: oppsRate,
+    ascRate: (proc.ascCost as number) || null,
+    stateAdjustedRate: stateRate,
+    commercialEstimate: {
+      low: stateCommercialLow || fairPriceLow,
+      high: stateCommercialHigh || fairPriceHigh,
+      average: commercialAvg,
+    },
+    negotiatedRates: negotiatedCount > 0 ? {
+      count: negotiatedCount,
+      min: negotiatedMin,
+      max: negotiatedMax,
+      average: negotiatedAvg,
+    } : null,
+    fairPriceRange: fairPriceLow && fairPriceHigh ? {
+      low: fairPriceLow,
+      high: fairPriceHigh,
+      basis: "150-250% of Medicare rate",
+    } : null,
+    percentile,
+    verdict: {
+      text: verdictText,
+      level: verdictLevel,
+      percentAboveAverage: percentAbove,
+    },
+    disclaimer: DISCLAIMER,
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/drugs/compare?brand=ozempic
+// ---------------------------------------------------------------------------
+
+async function handleDrugCompare(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const brand = url.searchParams.get("brand");
+  if (!brand) return error("Missing 'brand' parameter", 400, cors);
+
+  const { results: brandDrugs } = await env.DB.prepare(
+    `SELECT code, description, category, national_non_fac_rate AS nadacPerUnit
+     FROM medical_procedures
+     WHERE category = 'Prescription Drug - Brand'
+       AND description LIKE ?1
+     ORDER BY national_non_fac_rate DESC
+     LIMIT 10`
+  ).bind(`%${brand.toUpperCase()}%`).all();
+
+  if (!brandDrugs || brandDrugs.length === 0) {
+    return error("Brand drug not found", 404, cors);
+  }
+
+  const brandDesc = (brandDrugs[0] as Record<string, unknown>).description as string;
+  const parts = brandDesc.split(/\s+/);
+  const dosageIdx = parts.findIndex(p => /^\d/.test(p));
+  const dosageForm = dosageIdx >= 0 ? parts.slice(dosageIdx).join(' ') : '';
+
+  let genericResults: unknown[] = [];
+  if (dosageForm) {
+    const { results } = await env.DB.prepare(
+      `SELECT code, description, category, national_non_fac_rate AS nadacPerUnit
+       FROM medical_procedures
+       WHERE category = 'Prescription Drug - Generic'
+         AND description LIKE ?1
+       ORDER BY national_non_fac_rate ASC
+       LIMIT 20`
+    ).bind(`%${dosageForm}%`).all();
+    genericResults = results || [];
+  }
+
+  const brandPrice = (brandDrugs[0] as Record<string, unknown>).nadacPerUnit as number;
+  const genericsWithSavings = genericResults.map((g: any) => ({
+    ...g,
+    monthlySavings: Math.round((brandPrice - g.nadacPerUnit) * 30 * 100) / 100,
+    annualSavings: Math.round((brandPrice - g.nadacPerUnit) * 365 * 100) / 100,
+    percentCheaper: brandPrice > 0 ? Math.round((1 - g.nadacPerUnit / brandPrice) * 100) : 0,
+  }));
+
+  return success({
+    brand: brandDrugs,
+    generics: genericsWithSavings,
+    brandAvgPerUnit: brandPrice,
+    cheapestGenericPerUnit: genericResults.length > 0 ? (genericResults[0] as any).nadacPerUnit : null,
+    potentialAnnualSavings: genericResults.length > 0
+      ? Math.round((brandPrice - (genericResults[0] as any).nadacPerUnit) * 365 * 100) / 100
+      : null,
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/drugs/categories
+// ---------------------------------------------------------------------------
+
+async function handleDrugCategories(env: Env, cors: Record<string, string>): Promise<Response> {
+  const categories = [
+    { slug: "pain-medications", name: "Pain Medications", description: "Analgesics, NSAIDs, and pain management drugs", keywords: ["IBUPROFEN","ACETAMINOPHEN","NAPROXEN","TRAMADOL","OXYCODONE","HYDROCODONE","MORPHINE","GABAPENTIN","PREGABALIN","MELOXICAM","DICLOFENAC","CELECOXIB","KETOROLAC","CODEINE","FENTANYL","HYDROMORPHONE","METHADONE","BUPRENORPHINE","LIDOCAINE"] },
+    { slug: "antibiotics", name: "Antibiotics", description: "Anti-infective medications for bacterial infections", keywords: ["AMOXICILLIN","AZITHROMYCIN","CIPROFLOXACIN","DOXYCYCLINE","LEVOFLOXACIN","METRONIDAZOLE","CEPHALEXIN","CLINDAMYCIN","SULFAMETHOXAZOLE","NITROFURANTOIN","PENICILLIN","AUGMENTIN","CEFTRIAXONE","VANCOMYCIN","ERYTHROMYCIN","TETRACYCLINE"] },
+    { slug: "heart-medications", name: "Heart & Cardiovascular", description: "Drugs for heart conditions, arrhythmias, and cardiovascular health", keywords: ["METOPROLOL","CARVEDILOL","DIGOXIN","AMIODARONE","WARFARIN","APIXABAN","RIVAROXABAN","CLOPIDOGREL","DILTIAZEM","VERAPAMIL","NITROGLYCERIN","ISOSORBIDE","ELIQUIS","XARELTO"] },
+    { slug: "diabetes-drugs", name: "Diabetes Medications", description: "Insulin, oral hypoglycemics, and GLP-1 receptor agonists", keywords: ["METFORMIN","INSULIN","GLIPIZIDE","GLYBURIDE","PIOGLITAZONE","SITAGLIPTIN","JARDIANCE","FARXIGA","INVOKANA","OZEMPIC","MOUNJARO","TRULICITY","RYBELSUS","VICTOZA","SEMAGLUTIDE","TIRZEPATIDE","DULAGLUTIDE","LIRAGLUTIDE","EMPAGLIFLOZIN","DAPAGLIFLOZIN"] },
+    { slug: "mental-health", name: "Mental Health Medications", description: "Antidepressants, anti-anxiety, antipsychotics, and mood stabilizers", keywords: ["SERTRALINE","FLUOXETINE","ESCITALOPRAM","CITALOPRAM","VENLAFAXINE","DULOXETINE","BUPROPION","TRAZODONE","AMITRIPTYLINE","QUETIAPINE","ARIPIPRAZOLE","RISPERIDONE","OLANZAPINE","LITHIUM","LAMOTRIGINE","ALPRAZOLAM","LORAZEPAM","CLONAZEPAM","BUSPIRONE","HYDROXYZINE"] },
+    { slug: "blood-pressure", name: "Blood Pressure Medications", description: "ACE inhibitors, ARBs, calcium channel blockers, and diuretics", keywords: ["LISINOPRIL","AMLODIPINE","LOSARTAN","VALSARTAN","HYDROCHLOROTHIAZIDE","ENALAPRIL","RAMIPRIL","BENAZEPRIL","IRBESARTAN","OLMESARTAN","TELMISARTAN","NIFEDIPINE","FUROSEMIDE","SPIRONOLACTONE","CHLORTHALIDONE","CLONIDINE","HYDRALAZINE"] },
+    { slug: "cholesterol", name: "Cholesterol Medications", description: "Statins, fibrates, and other lipid-lowering drugs", keywords: ["ATORVASTATIN","ROSUVASTATIN","SIMVASTATIN","PRAVASTATIN","LOVASTATIN","EZETIMIBE","FENOFIBRATE","GEMFIBROZIL","REPATHA","PRALUENT"] },
+  ];
+
+  const results = [];
+  for (const cat of categories) {
+    const likeClauses = cat.keywords.map((_, i) => `description LIKE ?${i + 1}`).join(" OR ");
+    const params = cat.keywords.map(k => `%${k}%`);
+    const countResult = await env.DB.prepare(
+      `SELECT COUNT(*) as total FROM medical_procedures WHERE category LIKE 'Prescription Drug%' AND (${likeClauses})`
+    ).bind(...params).first<{ total: number }>();
+
+    results.push({
+      slug: cat.slug,
+      name: cat.name,
+      description: cat.description,
+      drugCount: countResult?.total || 0,
+    });
+  }
+
+  return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/drugs/glp1
+// ---------------------------------------------------------------------------
+
+async function handleGlp1Drugs(env: Env, cors: Record<string, string>): Promise<Response> {
+  const glp1Families = [
+    { brand: "OZEMPIC", generic: "semaglutide", pattern: "OZEMPIC%", indication: "Type 2 diabetes", typicalMonthlyUnits: 4 },
+    { brand: "WEGOVY", generic: "semaglutide", pattern: "WEGOVY%", indication: "Weight loss", typicalMonthlyUnits: 4 },
+    { brand: "RYBELSUS", generic: "semaglutide (oral)", pattern: "RYBELSUS%", indication: "Type 2 diabetes", typicalMonthlyUnits: 30 },
+    { brand: "MOUNJARO", generic: "tirzepatide", pattern: "MOUNJARO%", indication: "Type 2 diabetes", typicalMonthlyUnits: 4 },
+    { brand: "ZEPBOUND", generic: "tirzepatide", pattern: "ZEPBOUND%", indication: "Weight loss", typicalMonthlyUnits: 4 },
+    { brand: "TRULICITY", generic: "dulaglutide", pattern: "TRULICITY%", indication: "Type 2 diabetes", typicalMonthlyUnits: 4 },
+    { brand: "VICTOZA", generic: "liraglutide", pattern: "VICTOZA%", indication: "Type 2 diabetes", typicalMonthlyUnits: 1 },
+    { brand: "SAXENDA", generic: "liraglutide", pattern: "SAXENDA%", indication: "Weight loss", typicalMonthlyUnits: 5 },
+    { brand: "BYETTA", generic: "exenatide", pattern: "BYETTA%", indication: "Type 2 diabetes", typicalMonthlyUnits: 1 },
+    { brand: "BYDUREON", generic: "exenatide ER", pattern: "BYDUREON%", indication: "Type 2 diabetes", typicalMonthlyUnits: 4 },
+  ];
+
+  const results = [];
+  for (const fam of glp1Families) {
+    const { results: drugs } = await env.DB.prepare(
+      `SELECT code, description, category, national_non_fac_rate AS nadacPerUnit
+       FROM medical_procedures WHERE description LIKE ?1 ORDER BY national_non_fac_rate ASC`
+    ).bind(fam.pattern).all();
+
+    if (drugs && drugs.length > 0) {
+      const prices = drugs.map((d: any) => d.nadacPerUnit).filter(Boolean);
+      const avgPrice = prices.length > 0 ? prices.reduce((a: number, b: number) => a + b, 0) / prices.length : 0;
+      const estMonthly = avgPrice * fam.typicalMonthlyUnits;
+      results.push({
+        brand: fam.brand, genericName: fam.generic, indication: fam.indication,
+        variants: drugs,
+        avgNadacPerUnit: Math.round(avgPrice * 100) / 100,
+        estimatedMonthlyCost: Math.round(estMonthly * 100) / 100,
+        estimatedAnnualCost: Math.round(estMonthly * 12 * 100) / 100,
+        typicalMonthlyUnits: fam.typicalMonthlyUnits,
+      });
+    }
+  }
+
+  const { results: genericGlp1 } = await env.DB.prepare(
+    `SELECT code, description, category, national_non_fac_rate AS nadacPerUnit
+     FROM medical_procedures
+     WHERE category = 'Prescription Drug - Generic'
+       AND (description LIKE '%LIRAGLUTIDE%' OR description LIKE '%EXENATIDE%' OR description LIKE '%SEMAGLUTIDE%' OR description LIKE '%TIRZEPATIDE%' OR description LIKE '%DULAGLUTIDE%')
+     ORDER BY description`
+  ).all();
+
+  return success({
+    drugs: results,
+    genericAlternatives: genericGlp1 || [],
+    summary: {
+      totalVariants: results.reduce((acc, r) => acc + r.variants.length, 0),
+      cheapestMonthly: results.length > 0 ? Math.min(...results.map(r => r.estimatedMonthlyCost)) : 0,
+      mostExpensiveMonthly: results.length > 0 ? Math.max(...results.map(r => r.estimatedMonthlyCost)) : 0,
+    }
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// Insurance Plans (ACA QHP 2026)
+// ---------------------------------------------------------------------------
+async function handleInsurancePlans(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const state = url.searchParams.get("state");
+  const metal = url.searchParams.get("metal");
+  const search = url.searchParams.get("search");
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
+  const offset = parseInt(url.searchParams.get("offset") || "0");
+
+  let where = "WHERE 1=1";
+  const params: string[] = [];
+  if (state) { where += " AND state_code = ?"; params.push(state.toUpperCase()); }
+  if (metal) { where += " AND metal_level = ?"; params.push(metal); }
+  if (search) { where += " AND (plan_name LIKE ? OR issuer_name LIKE ?)"; params.push(`%${search}%`, `%${search}%`); }
+
+  const countQ = await env.DB.prepare(`SELECT COUNT(*) as total FROM insurance_plans ${where}`).bind(...params).first<{total: number}>();
+  const total = countQ?.total || 0;
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, plan_name AS planName, issuer_name AS issuerName, state_code AS stateCode,
+            metal_level AS metalLevel, plan_type AS planType,
+            premium_age30 AS premiumAge30, premium_age40 AS premiumAge40, premium_age50 AS premiumAge50,
+            deductible_individual AS deductibleIndividual, deductible_family AS deductibleFamily,
+            oop_max_individual AS oopMaxIndividual, oop_max_family AS oopMaxFamily,
+            copay_primary_care AS copayPrimaryCare, copay_specialist AS copaySpecialist, copay_er AS copayEr,
+            coinsurance_inpatient AS coinsuranceInpatient, coinsurance_outpatient AS coinsuranceOutpatient,
+            coinsurance_imaging AS coinsuranceImaging, year
+     FROM insurance_plans ${where}
+     ORDER BY state_code, metal_level, premium_age30
+     LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all();
+
+  return success(results, cors, { pagination: { total, limit, offset } });
+}
+
+// ---------------------------------------------------------------------------
+// Out-of-Pocket Cost Calculator
+// ---------------------------------------------------------------------------
+async function handleOopCalculator(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  // Accept procedure codes as comma-separated list
+  const codes = (url.searchParams.get("codes") || "").split(",").filter(Boolean);
+  if (codes.length === 0) return error("At least one procedure code is required", 400, cors);
+
+  const deductible = parseFloat(url.searchParams.get("deductible") || "0");
+  const deductibleMet = parseFloat(url.searchParams.get("deductible_met") || "0");
+  const coinsurance = parseFloat(url.searchParams.get("coinsurance") || "0.2");
+  const oopMax = parseFloat(url.searchParams.get("oop_max") || "9450");
+  const copay = parseFloat(url.searchParams.get("copay") || "0");
+  const setting = url.searchParams.get("setting") || "facility"; // facility, non_facility, asc, hospital_outpatient
+  const state = url.searchParams.get("state");
+  const planId = url.searchParams.get("plan_id");
+
+  // If plan_id provided, load plan details for deductible/coinsurance
+  let planDeductible = deductible;
+  let planCoinsurance = coinsurance;
+  let planOopMax = oopMax;
+  let planCopay = copay;
+  let planName = null as string | null;
+
+  if (planId) {
+    const plan = await env.DB.prepare(
+      `SELECT * FROM insurance_plans WHERE id = ?`
+    ).bind(planId).first<any>();
+    if (plan) {
+      planDeductible = plan.deductible_individual || deductible;
+      planCoinsurance = plan.coinsurance_inpatient || coinsurance;
+      planOopMax = plan.oop_max_individual || oopMax;
+      planCopay = plan.copay_specialist || copay;
+      planName = plan.plan_name;
+    }
+  }
+
+  // Fetch procedures
+  const placeholders = codes.map(() => "?").join(",");
+  const { results: procedures } = await env.DB.prepare(
+    `SELECT code, description, category, body_system,
+            national_facility_rate, national_non_fac_rate,
+            hospital_outpatient_cost, asc_cost,
+            consumer_name
+     FROM medical_procedures
+     LEFT JOIN consumer_descriptions ON medical_procedures.code = consumer_descriptions.code
+     WHERE medical_procedures.code IN (${placeholders})`
+  ).bind(...codes).all();
+
+  // Get geographic rates if state specified
+  let geoRates: Record<string, any> = {};
+  if (state && procedures.length > 0) {
+    const procIds = await env.DB.prepare(
+      `SELECT id, code FROM medical_procedures WHERE code IN (${placeholders})`
+    ).bind(...codes).all();
+
+    for (const proc of procIds.results) {
+      const geo = await env.DB.prepare(
+        `SELECT facility_rate, non_facility_rate, estimated_commercial_low, estimated_commercial_high
+         FROM medical_cost_geographic
+         WHERE procedure_id = ? AND state_code = ?
+         LIMIT 1`
+      ).bind((proc as any).id, state.toUpperCase()).first<any>();
+      if (geo) geoRates[(proc as any).code] = geo;
+    }
+  }
+
+  // Calculate OOP for each procedure
+  let totalProviderCharges = 0;
+  let runningDeductibleRemaining = Math.max(0, planDeductible - deductibleMet);
+  let runningOopTotal = 0;
+
+  const procedureResults = (procedures as any[]).map((proc: any) => {
+    let providerCharge = 0;
+    const geo = geoRates[proc.code];
+
+    if (setting === "asc" && proc.asc_cost) {
+      providerCharge = proc.asc_cost;
+    } else if (setting === "hospital_outpatient" && proc.hospital_outpatient_cost) {
+      providerCharge = proc.hospital_outpatient_cost;
+    } else if (setting === "non_facility" && proc.national_non_fac_rate) {
+      providerCharge = proc.national_non_fac_rate;
+    } else {
+      providerCharge = proc.national_facility_rate || proc.national_non_fac_rate || 0;
+    }
+
+    // Use geographic rate if available
+    if (geo) {
+      if (setting === "non_facility" && geo.non_facility_rate) {
+        providerCharge = geo.non_facility_rate;
+      } else if (geo.facility_rate) {
+        providerCharge = geo.facility_rate;
+      }
+    }
+
+    // Estimate commercial rate (150-250% of Medicare)
+    const commercialLow = geo?.estimated_commercial_low || providerCharge * 1.5;
+    const commercialHigh = geo?.estimated_commercial_high || providerCharge * 2.5;
+    const negotiatedRate = (commercialLow + commercialHigh) / 2;
+
+    // Calculate patient responsibility
+    let deductiblePortion = 0;
+    let coinsurancePortion = 0;
+    let copayPortion = planCopay;
+
+    if (runningDeductibleRemaining > 0) {
+      deductiblePortion = Math.min(negotiatedRate, runningDeductibleRemaining);
+      runningDeductibleRemaining -= deductiblePortion;
+    }
+
+    const afterDeductible = negotiatedRate - deductiblePortion;
+    if (afterDeductible > 0) {
+      coinsurancePortion = afterDeductible * planCoinsurance;
+    }
+
+    let patientTotal = deductiblePortion + coinsurancePortion + copayPortion;
+
+    // Apply OOP max
+    if (runningOopTotal + patientTotal > planOopMax) {
+      patientTotal = Math.max(0, planOopMax - runningOopTotal);
+    }
+    runningOopTotal += patientTotal;
+
+    totalProviderCharges += providerCharge;
+
+    return {
+      code: proc.code,
+      description: proc.consumer_name || proc.description,
+      category: proc.category,
+      medicareRate: providerCharge,
+      estimatedNegotiatedRate: Math.round(negotiatedRate),
+      commercialRange: { low: Math.round(commercialLow), high: Math.round(commercialHigh) },
+      yourCost: {
+        deductiblePortion: Math.round(deductiblePortion * 100) / 100,
+        coinsurancePortion: Math.round(coinsurancePortion * 100) / 100,
+        copay: copayPortion,
+        total: Math.round(patientTotal * 100) / 100,
+      },
+      settings: {
+        facility: proc.national_facility_rate,
+        nonFacility: proc.national_non_fac_rate,
+        hospitalOutpatient: proc.hospital_outpatient_cost,
+        asc: proc.asc_cost,
+      },
+    };
+  });
+
+  const totalOop = procedureResults.reduce((sum: number, p: any) => sum + p.yourCost.total, 0);
+
+  return success({
+    procedures: procedureResults,
+    insurance: {
+      planName: planName,
+      deductible: planDeductible,
+      deductibleMet: deductibleMet,
+      deductibleRemaining: Math.max(0, planDeductible - deductibleMet),
+      coinsurance: planCoinsurance,
+      oopMax: planOopMax,
+      copay: planCopay,
+    },
+    summary: {
+      totalMedicareCharges: Math.round(totalProviderCharges),
+      totalEstimatedNegotiated: procedureResults.reduce((s: number, p: any) => s + p.estimatedNegotiatedRate, 0),
+      totalOutOfPocket: Math.round(totalOop * 100) / 100,
+      oopMaxReached: runningOopTotal >= planOopMax,
+      setting: setting,
+      state: state || "national",
+    },
+    disclaimer: DISCLAIMER,
+  }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/auto-insurance/:state — State auto insurance rules
+// ---------------------------------------------------------------------------
+async function handleAutoInsurance(stateCode: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT state_code AS stateCode, state_name AS stateName, fault_system AS faultSystem,
+            min_bi_per_person AS minBiPerPerson, min_bi_per_accident AS minBiPerAccident,
+            min_pd AS minPd, pip_required AS pipRequired, pip_minimum AS pipMinimum,
+            um_required AS umRequired, medpay_required AS medpayRequired,
+            avg_annual_premium AS avgAnnualPremium, uninsured_rate AS uninsuredRate
+     FROM state_auto_insurance WHERE state_code = ?`
+  ).bind(stateCode).first();
+
+  if (!row) return error(`No auto insurance data for state: ${stateCode}`, 404, cors);
+
+  return success({
+    ...row,
+    pipRequired: !!(row as any).pipRequired,
+    umRequired: !!(row as any).umRequired,
+    medpayRequired: !!(row as any).medpayRequired,
+    biLimitsFormatted: (row as any).minBiPerPerson > 0
+      ? `$${((row as any).minBiPerPerson / 1000).toFixed(0)}K / $${((row as any).minBiPerAccident / 1000).toFixed(0)}K`
+      : 'None required',
+    faultSystemLabel: (row as any).faultSystem === 'tort' ? 'At-Fault (Tort)'
+      : (row as any).faultSystem === 'no-fault' ? 'No-Fault'
+      : 'Choice (No-Fault or Tort)',
+  }, cors);
 }

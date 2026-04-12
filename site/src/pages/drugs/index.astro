@@ -102,7 +102,7 @@ function drugDisplayName(desc: string): string {
     </form>
 
     <!-- Type filter pills -->
-    <div class="flex flex-wrap gap-2 mb-8">
+    <div class="flex flex-wrap gap-2 mb-4">
       <a
         href="/drugs/"
         class={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${!type && !search ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -115,6 +115,31 @@ function drugDisplayName(desc: string): string {
         href="/drugs/?type=brand"
         class={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${type === 'brand' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}`}
       >Brand Name</a>
+    </div>
+
+    <!-- Feature links -->
+    <div class="grid sm:grid-cols-3 gap-3 mb-8">
+      <a href="/drugs/glp1/" class="flex items-center gap-3 bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-xl px-4 py-3 hover:shadow-md transition-all">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600 font-bold text-xs">GLP-1</div>
+        <div>
+          <div class="text-sm font-bold text-gray-900">GLP-1 Drug Costs</div>
+          <div class="text-xs text-gray-500">Ozempic, Wegovy, Mounjaro</div>
+        </div>
+      </a>
+      <a href="/drugs/compare/" class="flex items-center gap-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-xl px-4 py-3 hover:shadow-md transition-all">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-xs">vs</div>
+        <div>
+          <div class="text-sm font-bold text-gray-900">Brand vs Generic</div>
+          <div class="text-xs text-gray-500">Compare & save up to 60x</div>
+        </div>
+      </a>
+      <a href="/drugs/category/diabetes-drugs/" class="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl px-4 py-3 hover:shadow-md transition-all">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">Rx</div>
+        <div>
+          <div class="text-sm font-bold text-gray-900">Browse by Category</div>
+          <div class="text-xs text-gray-500">Pain, antibiotics, heart & more</div>
+        </div>
+      </a>
     </div>
 
     <!-- Results table -->

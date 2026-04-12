@@ -1,0 +1,382 @@
+---
+import Base from '@/layouts/Base.astro';
+import { STATES } from '@/lib/api';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Medical Bill Negotiation Letter Generator",
+  "url": "https://medicalcosts.info/negotiate/letter/",
+  "applicationCategory": "HealthApplication",
+  "description": "Generate a professional medical bill negotiation letter citing Medicare rates and fair pricing data.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+};
+---
+
+<Base
+  title="Free Medical Bill Negotiation Letter Generator | MedicalCosts.info"
+  description="Generate a professional medical bill negotiation letter backed by Medicare rate data. Enter your details and get a ready-to-send letter citing fair pricing benchmarks."
+  canonical="/negotiate/letter/"
+  schema={schema}
+>
+  <section class="bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 text-white py-12 sm:py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight mb-4">
+        Medical Bill Negotiation Letter Generator
+      </h1>
+      <p class="text-lg text-brand-100 max-w-3xl">
+        Fill in your details below and we will generate a professional negotiation letter citing Medicare rates and fair pricing data for your procedure.
+      </p>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="grid lg:grid-cols-5 gap-8">
+      <!-- Form -->
+      <div class="lg:col-span-2">
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 sticky top-24">
+          <h2 class="text-lg font-bold text-gray-900 mb-4">Your Information</h2>
+          <form id="letter-form" class="space-y-4">
+            <div>
+              <label for="your-name" class="block text-sm font-semibold text-gray-700 mb-1">Your Full Name</label>
+              <input id="your-name" type="text" placeholder="Jane Smith" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="your-address" class="block text-sm font-semibold text-gray-700 mb-1">Your Address</label>
+              <input id="your-address" type="text" placeholder="123 Main St, Denver, CO 80202" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="your-phone" class="block text-sm font-semibold text-gray-700 mb-1">Phone Number</label>
+              <input id="your-phone" type="tel" placeholder="(555) 123-4567" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="your-email" class="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+              <input id="your-email" type="email" placeholder="jane@example.com" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+
+            <hr class="border-gray-200" />
+
+            <h2 class="text-lg font-bold text-gray-900">Provider Details</h2>
+            <div>
+              <label for="hospital-name" class="block text-sm font-semibold text-gray-700 mb-1">Hospital / Provider Name</label>
+              <input id="hospital-name" type="text" placeholder="Denver General Hospital" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="hospital-address" class="block text-sm font-semibold text-gray-700 mb-1">Provider Address (optional)</label>
+              <input id="hospital-address" type="text" placeholder="456 Hospital Dr, Denver, CO" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="account-number" class="block text-sm font-semibold text-gray-700 mb-1">Account / Invoice Number</label>
+              <input id="account-number" type="text" placeholder="INV-12345" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="service-date" class="block text-sm font-semibold text-gray-700 mb-1">Date of Service</label>
+              <input id="service-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+
+            <hr class="border-gray-200" />
+
+            <h2 class="text-lg font-bold text-gray-900">Procedure Details</h2>
+            <div>
+              <label for="proc-search" class="block text-sm font-semibold text-gray-700 mb-1">CPT Code or Procedure Name</label>
+              <div class="relative">
+                <input id="proc-search" type="text" placeholder="e.g., 99285 or ER Visit" autocomplete="off" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+                <div id="proc-dropdown" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto"></div>
+              </div>
+              <input type="hidden" id="proc-code" />
+              <p id="proc-selected" class="mt-1 text-xs text-brand-600 font-medium hidden"></p>
+            </div>
+            <div>
+              <label for="proc-description" class="block text-sm font-semibold text-gray-700 mb-1">Procedure Description</label>
+              <input id="proc-description" type="text" placeholder="Emergency Room Visit (High Complexity)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="billed-amount" class="block text-sm font-semibold text-gray-700 mb-1">Amount Billed ($)</label>
+              <input id="billed-amount" type="number" min="1" step="0.01" placeholder="2500" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm" />
+            </div>
+            <div>
+              <label for="letter-state" class="block text-sm font-semibold text-gray-700 mb-1">State</label>
+              <select id="letter-state" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-sm bg-white">
+                <option value="">Select state</option>
+                {STATES.map(s => (
+                  <option value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <button type="submit" id="generate-btn" class="w-full px-4 py-3 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors text-sm shadow-lg">
+              Generate Letter
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Letter Preview -->
+      <div class="lg:col-span-3">
+        <div id="letter-placeholder" class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center text-gray-400 min-h-[400px] flex items-center justify-center">
+          <div>
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <p class="text-lg font-medium">Your letter will appear here</p>
+            <p class="text-sm mt-1">Fill in the form and click "Generate Letter"</p>
+          </div>
+        </div>
+
+        <div id="letter-output" class="hidden">
+          <!-- Action buttons -->
+          <div class="flex gap-3 mb-4">
+            <button id="copy-btn" class="inline-flex items-center px-4 py-2 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors text-sm">
+              <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+              Copy to Clipboard
+            </button>
+            <button id="print-btn" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-sm">
+              <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              Print Letter
+            </button>
+          </div>
+
+          <!-- Letter content -->
+          <div id="letter-content" class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 sm:p-10 font-serif text-gray-800 leading-relaxed text-[15px] print:shadow-none print:border-none print:p-0">
+          </div>
+
+          <!-- Data sources note -->
+          <div class="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-500">
+            <p class="font-semibold text-gray-600 mb-1">Data Sources</p>
+            <p>Medicare rates from CMS Physician Fee Schedule CY2026. Commercial rate estimates based on 150-250% of Medicare, consistent with published research on commercial-to-Medicare price ratios. Hospital negotiated rates from Machine-Readable Files required under the Hospital Price Transparency Rule.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const API = 'https://medical-costs-api.david-568.workers.dev';
+
+    function fmt(n: number | null | undefined): string {
+      if (n == null) return 'N/A';
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    }
+
+    function todayStr(): string {
+      const d = new Date();
+      return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    // Procedure search autocomplete
+    const procSearch = document.getElementById('proc-search') as HTMLInputElement;
+    const procDropdown = document.getElementById('proc-dropdown')!;
+    const procCode = document.getElementById('proc-code') as HTMLInputElement;
+    const procSelected = document.getElementById('proc-selected')!;
+    const procDesc = document.getElementById('proc-description') as HTMLInputElement;
+
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    procSearch.addEventListener('input', () => {
+      const q = procSearch.value.trim();
+      if (debounce) clearTimeout(debounce);
+      if (q.length < 2) { procDropdown.classList.add('hidden'); return; }
+
+      debounce = setTimeout(async () => {
+        try {
+          const res = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&limit=6`);
+          const json = await res.json();
+          if (!json.success) return;
+          const procs = (json.data.procedures || []).slice(0, 5);
+          if (procs.length === 0) {
+            procDropdown.innerHTML = '<div class="px-3 py-2 text-xs text-gray-500">No results</div>';
+            procDropdown.classList.remove('hidden');
+            return;
+          }
+          procDropdown.innerHTML = procs.map((p: any) =>
+            `<button type="button" class="proc-pick w-full text-left px-3 py-2 hover:bg-brand-50 border-b border-gray-50 text-sm" data-code="${p.code}" data-name="${(p.consumerName || p.description).replace(/"/g, '&quot;')}">
+              <div class="font-medium text-gray-900 text-xs">${p.consumerName || p.description}</div>
+              <div class="text-xs text-gray-500 font-mono">CPT ${p.code}${p.nationalFacilityRate ? ' - ' + fmt(p.nationalFacilityRate) : ''}</div>
+            </button>`
+          ).join('');
+          procDropdown.classList.remove('hidden');
+
+          procDropdown.querySelectorAll('.proc-pick').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const code = (btn as HTMLElement).dataset.code!;
+              const name = (btn as HTMLElement).dataset.name!;
+              procCode.value = code;
+              procSearch.value = code;
+              procDesc.value = name;
+              procSelected.textContent = `${name} (CPT ${code})`;
+              procSelected.classList.remove('hidden');
+              procDropdown.classList.add('hidden');
+            });
+          });
+        } catch {}
+      }, 250);
+    });
+
+    procSearch.addEventListener('blur', () => {
+      const v = procSearch.value.trim();
+      if (/^\d{4,5}[A-Z]?$/.test(v) && !procCode.value) procCode.value = v;
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('#proc-search, #proc-dropdown')) {
+        procDropdown.classList.add('hidden');
+      }
+    });
+
+    // Generate letter
+    const form = document.getElementById('letter-form')!;
+    const placeholder = document.getElementById('letter-placeholder')!;
+    const output = document.getElementById('letter-output')!;
+    const letterContent = document.getElementById('letter-content')!;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const yourName = (document.getElementById('your-name') as HTMLInputElement).value.trim() || '[Your Name]';
+      const yourAddress = (document.getElementById('your-address') as HTMLInputElement).value.trim() || '[Your Address]';
+      const yourPhone = (document.getElementById('your-phone') as HTMLInputElement).value.trim() || '[Phone Number]';
+      const yourEmail = (document.getElementById('your-email') as HTMLInputElement).value.trim() || '[Email Address]';
+      const hospitalName = (document.getElementById('hospital-name') as HTMLInputElement).value.trim() || '[Hospital Name]';
+      const hospitalAddress = (document.getElementById('hospital-address') as HTMLInputElement).value.trim() || '[Hospital Address]';
+      const accountNumber = (document.getElementById('account-number') as HTMLInputElement).value.trim() || '[Account Number]';
+      const serviceDate = (document.getElementById('service-date') as HTMLInputElement).value || '[Date of Service]';
+      const code = procCode.value || procSearch.value.trim();
+      const description = procDesc.value.trim() || '[Procedure Description]';
+      const billedAmount = parseFloat((document.getElementById('billed-amount') as HTMLInputElement).value) || 0;
+      const state = (document.getElementById('letter-state') as HTMLSelectElement).value;
+
+      // Fetch pricing data if we have a code
+      let medicareRate: number | null = null;
+      let fairLow: number | null = null;
+      let fairHigh: number | null = null;
+      let targetAmount: number | null = null;
+      let commercialAvg: number | null = null;
+      let negotiatedInfo = '';
+      let pctOfMedicare = '';
+
+      if (code && billedAmount > 0) {
+        try {
+          const params = new URLSearchParams({ code, amount: String(billedAmount) });
+          if (state) params.set('state', state);
+          const res = await fetch(`${API}/api/bill-check?${params}`);
+          const json = await res.json();
+          if (json.success) {
+            const d = json.data;
+            medicareRate = d.medicareRate;
+            if (d.fairPriceRange) {
+              fairLow = d.fairPriceRange.low;
+              fairHigh = d.fairPriceRange.high;
+            }
+            targetAmount = medicareRate ? Math.round(medicareRate * 2) : null;
+            commercialAvg = d.commercialEstimate?.average;
+            if (medicareRate && medicareRate > 0) {
+              pctOfMedicare = `${Math.round((billedAmount / medicareRate) * 100)}%`;
+            }
+            if (d.negotiatedRates) {
+              negotiatedInfo = `Furthermore, hospital price transparency data shows negotiated rates for this procedure ranging from ${fmt(d.negotiatedRates.min)} to ${fmt(d.negotiatedRates.max)} across ${d.negotiatedRates.count} published contracts.`;
+            }
+          }
+        } catch {}
+      }
+
+      const formattedDate = serviceDate !== '[Date of Service]'
+        ? new Date(serviceDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        : serviceDate;
+
+      // Build letter HTML
+      const letterHtml = `
+        <p>${yourName}<br>${yourAddress}</p>
+        <p>${todayStr()}</p>
+        <p>${hospitalName}<br>Billing Department<br>${hospitalAddress}</p>
+        <p>
+          <strong>Re: Account #${accountNumber}</strong><br>
+          Patient: ${yourName}<br>
+          Date of Service: ${formattedDate}
+        </p>
+        <p>Dear Billing Department,</p>
+        <p>I am writing to formally dispute the charges on the above-referenced account. I received a bill for <strong>${fmt(billedAmount)}</strong> for <strong>${description}</strong>${code ? ` (CPT Code: ${code})` : ''}, and I believe this amount is above the fair and customary rate for this service.</p>
+        ${medicareRate ? `
+        <p>After researching publicly available pricing data from the Centers for Medicare and Medicaid Services (CMS), I have found the following:</p>
+        <ul style="margin-left: 1.5em; margin-bottom: 1em;">
+          <li>The <strong>Medicare reimbursement rate</strong> for CPT ${code} is <strong>${fmt(medicareRate)}</strong></li>
+          ${fairLow && fairHigh ? `<li>Commercial insurance companies typically negotiate rates between <strong>${fmt(fairLow)}</strong> and <strong>${fmt(fairHigh)}</strong> (150-250% of Medicare)</li>` : ''}
+          ${commercialAvg ? `<li>The average commercial rate in our data is <strong>${fmt(commercialAvg)}</strong></li>` : ''}
+          <li>My bill of ${fmt(billedAmount)} represents <strong>${pctOfMedicare} of the Medicare rate</strong>, which is ${billedAmount > (medicareRate * 2.5) ? 'significantly ' : ''}above the typical commercial insurance rate</li>
+        </ul>
+        ${negotiatedInfo ? `<p>${negotiatedInfo}</p>` : ''}
+        <p>Based on this data, I am requesting that my bill be adjusted to <strong>${fmt(targetAmount)}</strong> (200% of the Medicare rate), which is consistent with what commercial insurance plans typically pay for this service and represents a fair and customary rate.</p>
+        ` : `
+        <p>I believe the amount charged exceeds the fair and customary rate for this service. I am requesting a detailed review and reduction of these charges to a reasonable amount.</p>
+        `}
+        <p>If you are unable to adjust the charges to this amount, I respectfully request:</p>
+        <ol style="margin-left: 1.5em; margin-bottom: 1em;">
+          <li>A detailed, line-by-line explanation of how the charges were determined</li>
+          <li>Information about your institution's financial assistance and charity care programs</li>
+          <li>An interest-free payment plan for the adjusted amount</li>
+          <li>Confirmation that this account will not be referred to collections while this dispute is pending</li>
+        </ol>
+        <p>I am committed to paying a fair price for the care I received and would like to resolve this matter without the need for further dispute. Please respond in writing within 30 days of receiving this letter.</p>
+        <p>Thank you for your prompt attention to this matter.</p>
+        <p>Sincerely,</p>
+        <p style="margin-top: 2em;">
+          ${yourName}<br>
+          ${yourPhone}<br>
+          ${yourEmail}
+        </p>
+        <hr style="margin-top: 2em; border-color: #e5e7eb;" />
+        <p style="font-size: 0.75em; color: #9ca3af;">
+          Pricing data from CMS Medicare Physician Fee Schedule CY2026 and hospital Machine-Readable Files.
+          Generated at MedicalCosts.info/negotiate/letter/
+        </p>
+      `;
+
+      letterContent.innerHTML = letterHtml;
+      placeholder.classList.add('hidden');
+      output.classList.remove('hidden');
+      output.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Copy to clipboard
+    document.getElementById('copy-btn')!.addEventListener('click', async () => {
+      const text = letterContent.innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        const btn = document.getElementById('copy-btn')!;
+        btn.innerHTML = '<svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Copied!';
+        setTimeout(() => {
+          btn.innerHTML = '<svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg> Copy to Clipboard';
+        }, 2000);
+      } catch {
+        // Fallback
+        const range = document.createRange();
+        range.selectNodeContents(letterContent);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        document.execCommand('copy');
+      }
+    });
+
+    // Print
+    document.getElementById('print-btn')!.addEventListener('click', () => {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Medical Bill Negotiation Letter</title>
+          <style>
+            body { font-family: Georgia, serif; max-width: 700px; margin: 40px auto; padding: 0 20px; font-size: 14px; line-height: 1.6; color: #1a1a1a; }
+            p { margin-bottom: 1em; }
+            ul, ol { margin-bottom: 1em; }
+            li { margin-bottom: 0.3em; }
+            strong { font-weight: 700; }
+            hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+          </style>
+        </head>
+        <body>${letterContent.innerHTML}</body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    });
+  </script>
+</Base>

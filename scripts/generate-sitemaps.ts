@@ -171,6 +171,8 @@ async function main(): Promise<void> {
     urlEntry(`${SITE_URL}/drugs/`, 0.8, 'weekly'),
     urlEntry(`${SITE_URL}/drg/`, 0.8, 'weekly'),
     urlEntry(`${SITE_URL}/states/`, 0.8, 'weekly'),
+    urlEntry(`${SITE_URL}/hospitals/`, 0.9, 'weekly'),
+    urlEntry(`${SITE_URL}/insurers/`, 0.9, 'weekly'),
     urlEntry(`${SITE_URL}/estimator/`, 0.7, 'weekly'),
     urlEntry(`${SITE_URL}/compare/`, 0.7, 'weekly'),
     urlEntry(`${SITE_URL}/mcp/`, 0.6, 'monthly'),
@@ -214,6 +216,32 @@ async function main(): Promise<void> {
   await writeFile('sitemap-states.xml', wrapSitemap(stateEntries));
   sitemapFiles.push('sitemap-states.xml');
 
+  // ---- Hospital state pages ----
+  const hospitalStateEntries = STATE_CODES.map(code =>
+    urlEntry(`${SITE_URL}/hospitals/${code}/`, 0.7)
+  );
+  await writeFile('sitemap-hospital-states.xml', wrapSitemap(hospitalStateEntries));
+  sitemapFiles.push('sitemap-hospital-states.xml');
+
+  // ---- Hospital state+DRG pages (top 20 DRGs x 51 states) ----
+  const TOP_DRGS = [
+    '871','291','177','193','872','189','392','690','280','378',
+    '853','683','682','689','470','065','698','640','064','481',
+  ];
+  const hospitalDrgEntries: string[] = [];
+  for (const state of STATE_CODES) {
+    for (const drg of TOP_DRGS) {
+      hospitalDrgEntries.push(urlEntry(`${SITE_URL}/hospitals/${state}/${drg}/`, 0.6));
+    }
+  }
+  const hospitalDrgSegments = Math.ceil(hospitalDrgEntries.length / MAX_URLS_PER_SITEMAP);
+  for (let i = 0; i < hospitalDrgSegments; i++) {
+    const slice = hospitalDrgEntries.slice(i * MAX_URLS_PER_SITEMAP, (i + 1) * MAX_URLS_PER_SITEMAP);
+    const filename = `sitemap-hospital-drgs-${i}.xml`;
+    await writeFile(filename, wrapSitemap(slice));
+    sitemapFiles.push(filename);
+  }
+
   // ---- Sitemap Index ----
   const indexEntries = sitemapFiles.map(f =>
     sitemapIndexEntry(`${SITE_URL}/${f}`)
@@ -221,12 +249,14 @@ async function main(): Promise<void> {
   await writeFile('sitemap-index.xml', wrapSitemapIndex(indexEntries));
 
   // Summary
-  const totalUrls = staticUrls.length + procEntries.length + condEntries.length + drgEntries.length + stateEntries.length;
+  const totalUrls = staticUrls.length + procEntries.length + condEntries.length + drgEntries.length + stateEntries.length + hospitalStateEntries.length + hospitalDrgEntries.length;
   console.log(`\nDone! Generated ${sitemapFiles.length + 1} sitemap files with ${totalUrls.toLocaleString()} total URLs.`);
   console.log(`  Procedures: ${procEntries.length.toLocaleString()} (${procSegments} file${procSegments > 1 ? 's' : ''})`);
   console.log(`  Conditions: ${condEntries.length}`);
   console.log(`  DRGs: ${drgEntries.length.toLocaleString()}`);
   console.log(`  States: ${stateEntries.length}`);
+  console.log(`  Hospital states: ${hospitalStateEntries.length}`);
+  console.log(`  Hospital DRGs: ${hospitalDrgEntries.length.toLocaleString()}`);
   console.log(`  Static: ${staticUrls.length}`);
   console.log(`\nSitemap index: ${OUTPUT_DIR}sitemap-index.xml`);
 }

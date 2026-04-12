@@ -276,3 +276,52 @@ CREATE TABLE IF NOT EXISTS hospital_drg_costs (
 CREATE INDEX IF NOT EXISTS idx_hdc_state ON hospital_drg_costs(provider_state);
 CREATE INDEX IF NOT EXISTS idx_hdc_drg ON hospital_drg_costs(drg_code);
 CREATE INDEX IF NOT EXISTS idx_hdc_provider ON hospital_drg_costs(provider_ccn);
+
+-- ============================================================================
+-- Insurance Plans (ACA QHP 2026 from healthcare.gov)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS insurance_plans (
+  id TEXT PRIMARY KEY,
+  plan_name TEXT,
+  issuer_name TEXT,
+  state_code TEXT,
+  metal_level TEXT,
+  plan_type TEXT,
+  premium_age30 REAL,
+  premium_age40 REAL,
+  premium_age50 REAL,
+  deductible_individual REAL,
+  deductible_family REAL,
+  oop_max_individual REAL,
+  oop_max_family REAL,
+  copay_primary_care REAL,
+  copay_specialist REAL,
+  copay_er REAL,
+  coinsurance_inpatient REAL,
+  coinsurance_outpatient REAL,
+  coinsurance_imaging REAL,
+  year INTEGER DEFAULT 2026
+);
+CREATE INDEX IF NOT EXISTS idx_ip_state ON insurance_plans(state_code);
+CREATE INDEX IF NOT EXISTS idx_ip_metal ON insurance_plans(metal_level);
+CREATE INDEX IF NOT EXISTS idx_ip_issuer ON insurance_plans(issuer_name);
+
+-- ============================================================================
+-- State Auto Insurance Rules (50 states + DC)
+-- Sources: MoneyGeek, NerdWallet, NAIC, III, IRC (compiled April 2026)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS state_auto_insurance (
+  state_code TEXT PRIMARY KEY,
+  state_name TEXT NOT NULL,
+  fault_system TEXT NOT NULL CHECK (fault_system IN ('tort', 'no-fault', 'choice')),
+  min_bi_per_person INTEGER NOT NULL DEFAULT 0,
+  min_bi_per_accident INTEGER NOT NULL DEFAULT 0,
+  min_pd INTEGER NOT NULL DEFAULT 0,
+  pip_required INTEGER NOT NULL DEFAULT 0,
+  pip_minimum INTEGER,
+  um_required INTEGER NOT NULL DEFAULT 0,
+  medpay_required INTEGER NOT NULL DEFAULT 0,
+  avg_annual_premium REAL,
+  uninsured_rate REAL
+);
+CREATE INDEX IF NOT EXISTS idx_sai_fault ON state_auto_insurance(fault_system);

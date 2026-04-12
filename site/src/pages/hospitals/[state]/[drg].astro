@@ -1,0 +1,240 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getHospitals, getHospitalStateDrgs, formatCurrencyFull, STATES } from '@/lib/api';
+
+// Top 20 DRGs by national volume
+const TOP_DRGS = [
+  '871','291','177','193','872','189','392','690','280','378',
+  '853','683','682','689','470','065','698','640','064','481',
+];
+
+export function getStaticPaths() {
+  const states = [
+    'al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id',
+    'il','in','ia','ks','ky','la','me','md','ma','mi','mn','ms',
+    'mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok',
+    'or','pa','ri','sc','sd','tn','tx','ut','vt','va','wa','wv',
+    'wi','wy','dc',
+  ];
+  const paths: Array<{ params: { state: string; drg: string } }> = [];
+  for (const state of states) {
+    for (const drg of TOP_DRGS) {
+      paths.push({ params: { state, drg } });
+    }
+  }
+  return paths;
+}
+
+const { state, drg } = Astro.params;
+const stateCode = state!.toUpperCase();
+const stateInfo = STATES.find(s => s.code === stateCode);
+const stateName = stateInfo?.name || stateCode;
+
+// Get all hospitals for this state + DRG combo
+const result = await getHospitals({ state: stateCode, drg: drg!, sort: 'charges_asc', limit: 200 });
+const hospitals = result.data;
+const summary = result.summary;
+
+const drgDescription = hospitals.length > 0
+  ? hospitals[0].drgDescription
+  : `DRG ${drg}`;
+
+// Short description for title
+const shortDesc = drgDescription.length > 60
+  ? drgDescription.substring(0, 57) + '...'
+  : drgDescription;
+
+const hospitalCount = hospitals.length;
+const totalDischarges = hospitals.reduce((s, h) => s + h.totalDischarges, 0);
+const avgCharges = hospitalCount > 0 ? Math.round(hospitals.reduce((s, h) => s + h.avgCoveredCharges, 0) / hospitalCount) : 0;
+const avgPayments = hospitalCount > 0 ? Math.round(hospitals.reduce((s, h) => s + h.avgTotalPayments, 0) / hospitalCount) : 0;
+const minCharges = hospitalCount > 0 ? Math.min(...hospitals.map(h => h.avgCoveredCharges)) : 0;
+const maxCharges = hospitalCount > 0 ? Math.max(...hospitals.map(h => h.avgCoveredCharges)) : 0;
+
+// Sort for chart (by charges ascending)
+const chartHospitals = [...hospitals].sort((a, b) => a.avgCoveredCharges - b.avgCoveredCharges);
+const barMax = maxCharges > 0 ? maxCharges : 1;
+
+const title = `Best Hospitals for ${shortDesc} in ${stateName} | MedicalCosts.info`;
+const description = `Compare ${hospitalCount} hospitals for ${drgDescription} in ${stateName}. Avg charges: ${formatCurrencyFull(avgCharges)}. Find the most affordable hospital near you.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "MedicalWebPage",
+  "name": title,
+  "description": description,
+  "url": `https://medicalcosts.info/hospitals/${state}/${drg}/`,
+};
+---
+
+<Base title={title} description={description} canonical={`/hospitals/${state}/${drg}/`} schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-teal-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/hospitals/" class="hover:text-teal-600">Hospitals</a>
+      <span class="mx-2">/</span>
+      <a href={`/hospitals/${state}/`} class="hover:text-teal-600">{stateName}</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">DRG {drg}</span>
+    </nav>
+
+    <div class="mb-2">
+      <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">DRG {drg}</span>
+    </div>
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+      {drgDescription}
+    </h1>
+    <p class="text-lg text-gray-500 mb-8">
+      Compare costs at {hospitalCount} hospitals in {stateName}
+    </p>
+
+    {hospitalCount === 0 ? (
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
+        <h2 class="text-xl font-semibold text-yellow-800 mb-2">No Data Available</h2>
+        <p class="text-yellow-700">No hospitals in {stateName} reported discharges for DRG {drg} in the CMS dataset.</p>
+        <a href={`/hospitals/${state}/`} class="mt-4 inline-block text-teal-600 font-semibold hover:underline">View all {stateName} hospitals</a>
+      </div>
+    ) : (
+      <>
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="text-2xl font-bold text-teal-700">{hospitalCount}</div>
+            <div class="text-sm text-gray-500">Hospitals</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="text-2xl font-bold text-teal-700">{totalDischarges.toLocaleString()}</div>
+            <div class="text-sm text-gray-500">Discharges</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="text-2xl font-bold text-orange-600">{formatCurrencyFull(avgCharges)}</div>
+            <div class="text-sm text-gray-500">Avg Charges</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="text-2xl font-bold text-green-700">{formatCurrencyFull(avgPayments)}</div>
+            <div class="text-sm text-gray-500">Avg Payment</div>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="text-2xl font-bold text-gray-700">{formatCurrencyFull(minCharges)} - {formatCurrencyFull(maxCharges)}</div>
+            <div class="text-sm text-gray-500">Charge Range</div>
+          </div>
+        </div>
+
+        <!-- Visual Bar Chart -->
+        <div class="mb-10">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4">Hospital Cost Comparison</h2>
+          <p class="text-sm text-gray-500 mb-4">Average covered charges by hospital (lowest to highest)</p>
+          <div class="space-y-2">
+            {chartHospitals.slice(0, 30).map((h, i) => {
+              const widthPct = Math.max((h.avgCoveredCharges / barMax) * 100, 3);
+              const isLowest = i < 3;
+              const isHighest = i >= chartHospitals.length - 3;
+              const barColor = isLowest ? 'bg-green-500' : isHighest ? 'bg-red-500' : 'bg-teal-500';
+              return (
+                <div class="flex items-center gap-3">
+                  <div class="w-48 md:w-64 text-xs text-gray-700 truncate flex-shrink-0 text-right" title={h.providerName}>
+                    {h.providerName}
+                  </div>
+                  <div class="flex-1 relative">
+                    <div class={`${barColor} h-7 rounded-r-lg flex items-center justify-end pr-2 transition-all`} style={`width: ${widthPct}%`}>
+                      <span class="text-white text-xs font-semibold whitespace-nowrap">{formatCurrencyFull(h.avgCoveredCharges)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {chartHospitals.length > 30 && (
+            <p class="text-sm text-gray-400 mt-3">Showing top 30 of {chartHospitals.length} hospitals. See full table below.</p>
+          )}
+        </div>
+
+        <!-- Full Data Table -->
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">Full Hospital Comparison</h2>
+        <div class="overflow-x-auto mb-10">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-gray-200 text-left">
+                <th class="py-3 pr-4 font-semibold text-gray-600">#</th>
+                <th class="py-3 pr-4 font-semibold text-gray-600">Hospital</th>
+                <th class="py-3 pr-4 font-semibold text-gray-600">City</th>
+                <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Discharges</th>
+                <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Charges</th>
+                <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Medicare</th>
+                <th class="py-3 font-semibold text-gray-600 text-right">Charge/Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chartHospitals.map((h, i) => (
+                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                  <td class="py-3 pr-4 text-gray-400 font-mono text-xs">{i + 1}</td>
+                  <td class="py-3 pr-4 font-medium text-gray-900">{h.providerName}</td>
+                  <td class="py-3 pr-4 text-gray-500">{h.providerCity}</td>
+                  <td class="py-3 pr-4 text-right text-gray-500">{h.totalDischarges.toLocaleString()}</td>
+                  <td class="py-3 pr-4 text-right font-semibold text-gray-700">{formatCurrencyFull(h.avgCoveredCharges)}</td>
+                  <td class="py-3 pr-4 text-right text-gray-700">{formatCurrencyFull(h.avgMedicarePayments)}</td>
+                  <td class="py-3 text-right">
+                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      (h.chargeToPaymentRatio || 0) >= 4 ? 'bg-red-100 text-red-700' :
+                      (h.chargeToPaymentRatio || 0) > 2 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {h.chargeToPaymentRatio || 'N/A'}x
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Key Insights -->
+        <div class="bg-gradient-to-br from-teal-50 to-blue-50 rounded-2xl p-8 border border-teal-100 mb-10">
+          <h2 class="text-xl font-bold text-gray-900 mb-4">Key Insights</h2>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Price Variation</h3>
+              <p class="text-sm text-gray-600">
+                For {drgDescription.toLowerCase()} in {stateName}, charges range from
+                <strong class="text-green-700">{formatCurrencyFull(minCharges)}</strong> to
+                <strong class="text-red-600">{formatCurrencyFull(maxCharges)}</strong> &mdash;
+                a {maxCharges > 0 && minCharges > 0 ? `${(maxCharges / minCharges).toFixed(1)}x` : 'significant'} difference depending on which hospital you visit.
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">What You Pay</h3>
+              <p class="text-sm text-gray-600">
+                Medicare pays an average of {formatCurrencyFull(avgPayments)} for this stay. Charges ({formatCurrencyFull(avgCharges)})
+                are the hospital's list price. Privately insured patients typically pay 150-250% of Medicare rates.
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+
+    <!-- Related DRGs in State -->
+    <div class="border-t border-gray-200 pt-8 mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Other Common Hospital Stays in {stateName}</h2>
+      <div class="flex flex-wrap gap-2">
+        {TOP_DRGS.filter(d => d !== drg).slice(0, 12).map(d => (
+          <a href={`/hospitals/${state}/${d}/`} class="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-teal-100 hover:text-teal-700 transition-colors">
+            DRG {d}
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <!-- Other States for same DRG -->
+    <div class="border-t border-gray-200 pt-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Compare This DRG in Other States</h2>
+      <div class="flex flex-wrap gap-2">
+        {STATES.filter(s => s.code !== stateCode).map(s => (
+          <a href={`/hospitals/${s.code.toLowerCase()}/${drg}/`} class="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-teal-100 hover:text-teal-700 transition-colors">
+            {s.code}
+          </a>
+        ))}
+      </div>
+    </div>
+  </div>
+</Base>

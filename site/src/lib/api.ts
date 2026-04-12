@@ -431,6 +431,117 @@ export async function getNegotiatedRates(code: string, state?: string): Promise<
   return fetchApi<NegotiatedRatesResponse>(`/negotiated-rates?${params}`);
 }
 
+// Hospital rankings
+export interface HospitalRanking {
+  providerCcn: string;
+  providerName: string;
+  providerCity: string;
+  providerState: string;
+  drgCount: number;
+  totalDischarges: number;
+  avgCharges: number;
+  avgPayments: number;
+  avgMedicare: number;
+  avgMarkup: number;
+}
+
+export interface HospitalRankingsResponse {
+  rankings: HospitalRanking[];
+  national: {
+    totalHospitals: number;
+    totalStates: number;
+    totalDrgs: number;
+    totalRecords: number;
+    totalDischarges: number;
+    nationalAvgCharges: number;
+    nationalAvgPayments: number;
+    nationalAvgMedicare: number;
+  };
+}
+
+export async function getHospitalRankings(metric = 'charges', direction = 'desc', limit = 10): Promise<HospitalRankingsResponse | null> {
+  return fetchApi<HospitalRankingsResponse>(`/hospitals/rankings?metric=${metric}&direction=${direction}&limit=${limit}`);
+}
+
+// Hospital states summary
+export interface HospitalStateSummary {
+  state: string;
+  hospitalCount: number;
+  drgCount: number;
+  totalDischarges: number;
+  avgCharges: number;
+  avgPayments: number;
+  avgMarkup: number;
+}
+
+export async function getHospitalStates(): Promise<HospitalStateSummary[]> {
+  const data = await fetchApi<HospitalStateSummary[]>('/hospitals/states');
+  return data || [];
+}
+
+// Hospital state DRGs
+export interface HospitalStateDrg {
+  drgCode: string;
+  drgDescription: string;
+  hospitalCount: number;
+  totalDischarges: number;
+  avgCharges: number;
+  avgPayments: number;
+  avgMedicare: number;
+  minCharges: number;
+  maxCharges: number;
+}
+
+export async function getHospitalStateDrgs(state: string, limit = 100): Promise<HospitalStateDrg[]> {
+  const data = await fetchApi<HospitalStateDrg[]>(`/hospitals/${state.toUpperCase()}/drgs?limit=${limit}`);
+  return data || [];
+}
+
+// Insurer report card
+export interface InsurerSummary {
+  payerName: string;
+  totalRates: number;
+  proceduresCovered: number;
+  hospitalCount: number;
+  stateCount: number;
+  avgRate: number;
+  minRate: number;
+  maxRate: number;
+}
+
+export interface InsurersResponse {
+  payers: InsurerSummary[];
+  summary: {
+    totalRates: number;
+    totalPayers: number;
+    totalHospitals: number;
+    totalStates: number;
+    overallAvgRate: number;
+    overallMinRate: number;
+    overallMaxRate: number;
+  };
+  medicareBaseline: { avgMedicarePayment: number };
+  disclaimer: string;
+}
+
+export async function getInsurers(limit = 50): Promise<InsurersResponse | null> {
+  return fetchApi<InsurersResponse>(`/insurers?limit=${limit}`);
+}
+
+// Drug comparison
+export async function getDrugComparison(brand: string) {
+  return fetchApi<any>(`/drugs/compare?brand=${encodeURIComponent(brand)}`);
+}
+
+export async function getDrugCategories(): Promise<Array<{ slug: string; name: string; description: string; drugCount: number }>> {
+  const data = await fetchApi<any[]>('/drugs/categories');
+  return data || [];
+}
+
+export async function getGlp1Drugs() {
+  return fetchApi<any>('/drugs/glp1');
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },

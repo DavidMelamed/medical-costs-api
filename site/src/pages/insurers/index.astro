@@ -1,0 +1,243 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getInsurers, formatCurrencyFull } from '@/lib/api';
+
+const data = await getInsurers(100);
+const payers = data?.payers || [];
+const summary = data?.summary;
+const medicareBaseline = data?.medicareBaseline?.avgMedicarePayment || 10000;
+
+// Calculate Medicare multiplier for each payer
+const payersWithMultiplier = payers.map(p => ({
+  ...p,
+  medicareMultiplier: medicareBaseline > 0 ? Math.round((p.avgRate / medicareBaseline) * 10) / 10 : null,
+})).sort((a, b) => b.totalRates - a.totalRates);
+
+// Group by tier
+const majorPayers = payersWithMultiplier.filter(p => p.totalRates >= 400);
+const otherPayers = payersWithMultiplier.filter(p => p.totalRates < 400);
+
+// Cheapest and most expensive
+const byAvgRate = [...payersWithMultiplier].sort((a, b) => a.avgRate - b.avgRate);
+const cheapest = byAvgRate.slice(0, 5);
+const mostExpensive = byAvgRate.slice(-5).reverse();
+
+const maxRate = payersWithMultiplier.length > 0 ? Math.max(...payersWithMultiplier.map(p => p.avgRate)) : 1;
+
+const title = 'Insurance Company Report Card — What Payers Actually Pay | MedicalCosts.info';
+const description = `See what ${summary?.totalPayers || 144} insurance companies actually pay hospitals. Compare Aetna, BCBS, Cigna, United, and more using real negotiated rate data from ${(summary?.totalRates || 39756).toLocaleString()} price transparency records.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Insurance Company Report Card",
+  "description": description,
+  "url": "https://medicalcosts.info/insurers/",
+};
+---
+
+<Base title={title} description={description} canonical="/insurers/" schema={schema}>
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-indigo-700 via-indigo-800 to-purple-900 text-white py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="text-sm text-indigo-200 mb-6">
+        <a href="/" class="hover:text-white">Home</a>
+        <span class="mx-2">/</span>
+        <span class="text-white font-medium">Insurers</span>
+      </nav>
+      <h1 class="text-4xl md:text-5xl font-extrabold mb-4">Insurance Company Report Card</h1>
+      <p class="text-xl text-indigo-100 max-w-3xl mb-4">
+        What do insurance companies <em>actually</em> pay hospitals? We analyzed
+        <strong>{(summary?.totalRates || 39756).toLocaleString()} negotiated rates</strong> from
+        <strong>{summary?.totalPayers || 144} payers</strong> to find out.
+      </p>
+      <p class="text-sm text-indigo-200 max-w-2xl">
+        Data source: Hospital Machine-Readable Files (MRFs) required by the CMS Hospital Price Transparency Rule.
+        This data was previously hidden from the public.
+      </p>
+    </div>
+  </section>
+
+  <!-- Key Stats -->
+  <section class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{summary?.totalPayers || 144}</div>
+          <div class="text-sm text-gray-500">Insurance Companies</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{(summary?.totalRates || 39756).toLocaleString()}</div>
+          <div class="text-sm text-gray-500">Negotiated Rates</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{formatCurrencyFull(summary?.overallAvgRate || 0)}</div>
+          <div class="text-sm text-gray-500">Overall Avg Rate</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-indigo-700">{formatCurrencyFull(medicareBaseline)}</div>
+          <div class="text-sm text-gray-500">Avg Medicare Payment</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- The Big Reveal -->
+    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-8 border border-indigo-100 mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">What Major Insurers Pay vs. Medicare</h2>
+      <p class="text-gray-600 mb-6">Medicare pays hospitals an average of <strong>{formatCurrencyFull(medicareBaseline)}</strong> per service. Here's how private insurers compare:</p>
+      <div class="space-y-4">
+        {majorPayers.slice(0, 15).map(p => {
+          const widthPct = Math.max((p.avgRate / maxRate) * 100, 5);
+          const isAboveMedicare = p.avgRate > medicareBaseline;
+          const ratio = p.avgRate / medicareBaseline;
+          const color = ratio >= 2.5 ? 'bg-red-500' : ratio >= 1.5 ? 'bg-orange-500' : ratio >= 0.8 ? 'bg-blue-500' : 'bg-green-500';
+          return (
+            <div class="flex items-center gap-4">
+              <div class="w-40 md:w-56 text-sm font-medium text-gray-900 text-right flex-shrink-0 truncate" title={p.payerName}>
+                {p.payerName}
+              </div>
+              <div class="flex-1 relative">
+                <div class={`${color} h-9 rounded-r-lg flex items-center justify-end pr-3 transition-all`} style={`width: ${widthPct}%`}>
+                  <span class="text-white text-xs font-bold whitespace-nowrap">{formatCurrencyFull(p.avgRate)}</span>
+                </div>
+              </div>
+              <div class="w-28 text-right flex-shrink-0">
+                {p.medicareMultiplier !== null && (
+                  <span class={`text-sm font-bold ${p.medicareMultiplier > 2 ? 'text-red-600' : p.medicareMultiplier > 1 ? 'text-blue-600' : 'text-green-600'}`}>
+                    {p.medicareMultiplier}x Medicare
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <!-- Medicare reference line description -->
+      <div class="mt-4 flex items-center gap-2 text-sm text-gray-500">
+        <div class="w-4 h-0.5 bg-gray-400"></div>
+        <span>Medicare baseline: {formatCurrencyFull(medicareBaseline)} avg payment</span>
+      </div>
+    </div>
+
+    <!-- Cheapest vs Most Expensive -->
+    <div class="grid lg:grid-cols-2 gap-8 mb-12">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Lowest Average Rates</h2>
+        <p class="text-gray-500 mb-4">Insurance companies with the lowest negotiated rates</p>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {cheapest.map((p, i) => (
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50 last:border-0">
+              <div class="flex items-center gap-3">
+                <span class="w-8 h-8 rounded-full bg-green-100 text-green-700 text-sm font-bold flex items-center justify-center">{i + 1}</span>
+                <div>
+                  <div class="font-semibold text-gray-900">{p.payerName}</div>
+                  <div class="text-xs text-gray-500">{p.totalRates} rates from {p.hospitalCount} hospitals</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-green-700">{formatCurrencyFull(p.avgRate)}</div>
+                {p.medicareMultiplier !== null && (
+                  <div class="text-xs text-gray-500">{p.medicareMultiplier}x Medicare</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h2 class="text-2xl font-bold text-gray-900 mb-2">Highest Average Rates</h2>
+        <p class="text-gray-500 mb-4">Insurance companies with the highest negotiated rates</p>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {mostExpensive.map((p, i) => (
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50 last:border-0">
+              <div class="flex items-center gap-3">
+                <span class="w-8 h-8 rounded-full bg-red-100 text-red-700 text-sm font-bold flex items-center justify-center">{i + 1}</span>
+                <div>
+                  <div class="font-semibold text-gray-900">{p.payerName}</div>
+                  <div class="text-xs text-gray-500">{p.totalRates} rates from {p.hospitalCount} hospitals</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-red-600">{formatCurrencyFull(p.avgRate)}</div>
+                {p.medicareMultiplier !== null && (
+                  <div class="text-xs text-gray-500">{p.medicareMultiplier}x Medicare</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Payer Table -->
+    <h2 class="text-2xl font-bold text-gray-900 mb-4">All Insurance Companies</h2>
+    <p class="text-gray-500 mb-6">Complete report card for all {payersWithMultiplier.length} payers with sufficient data</p>
+    <div class="overflow-x-auto mb-10">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b-2 border-gray-200 text-left">
+            <th class="py-3 pr-4 font-semibold text-gray-600">Insurer</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Rates</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Procedures</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Hospitals</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Avg Rate</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Min Rate</th>
+            <th class="py-3 pr-4 font-semibold text-gray-600 text-right">Max Rate</th>
+            <th class="py-3 font-semibold text-gray-600 text-right">vs Medicare</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payersWithMultiplier.map(p => (
+              <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="py-3 pr-4 font-medium text-gray-900">{p.payerName}</td>
+                <td class="py-3 pr-4 text-right text-gray-500">{p.totalRates.toLocaleString()}</td>
+                <td class="py-3 pr-4 text-right text-gray-500">{p.proceduresCovered}</td>
+                <td class="py-3 pr-4 text-right text-gray-500">{p.hospitalCount}</td>
+                <td class="py-3 pr-4 text-right font-semibold text-gray-700">{formatCurrencyFull(p.avgRate)}</td>
+                <td class="py-3 pr-4 text-right text-gray-500">{formatCurrencyFull(p.minRate)}</td>
+                <td class="py-3 pr-4 text-right text-gray-500">{formatCurrencyFull(p.maxRate)}</td>
+                <td class="py-3 text-right">
+                  {p.medicareMultiplier !== null ? (
+                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      p.medicareMultiplier === null ? 'text-gray-400' :
+                      p.medicareMultiplier > 3 ? 'text-red-700 bg-red-50' :
+                      p.medicareMultiplier > 2 ? 'text-orange-700 bg-orange-50' :
+                      p.medicareMultiplier > 1 ? 'text-blue-700 bg-blue-50' : 'text-green-700 bg-green-50'
+                    }`}>
+                      {p.medicareMultiplier}x
+                    </span>
+                  ) : 'N/A'}
+                </td>
+              </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Understanding the Data -->
+    <div class="bg-white border border-gray-200 rounded-2xl p-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Understanding Insurance Rates</h2>
+      <div class="grid md:grid-cols-2 gap-6 text-sm text-gray-600">
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-2">What are negotiated rates?</h3>
+          <p>These are the actual prices that insurance companies have contracted with hospitals to pay for specific services. Since January 2021, hospitals are required to publish these rates in machine-readable files.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-2">Why do rates vary so much?</h3>
+          <p>Each insurer negotiates separately with each hospital. Larger insurers can often negotiate lower rates. The same procedure can cost 10x more at one hospital vs. another, even with the same insurer.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-2">Is this what I would pay?</h3>
+          <p>Not necessarily. Your out-of-pocket cost depends on your deductible, copay, coinsurance, and out-of-pocket maximum. These rates show what your insurer pays the hospital on your behalf.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-2">Why compare to Medicare?</h3>
+          <p>Medicare rates are set by the government and are the closest thing to a "standard price" in US healthcare. Comparing to Medicare shows how much more or less private insurers pay.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Base>

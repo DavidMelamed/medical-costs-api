@@ -53,6 +53,18 @@ const segmentLabels: Record<string, string> = {
   costs: "Costs",
   trends: "Cost Trends",
   map: "Heat Map",
+  hospitals: "Hospitals",
+  insurers: "Insurers",
+  "bill-checker": "Bill Checker",
+  negotiate: "Negotiate Bills",
+  letter: "Letter Generator",
+  glp1: "GLP-1 Drugs",
+  category: "Category",
+  "what-will-i-pay": "What Will I Pay?",
+  "insurance-guide": "Insurance Guide",
+  "car-accident-costs": "Car Accident Costs",
+  "who-pays": "Who Pays?",
+  "self-pay": "Self-Pay",
 };
 let breadcrumbPath = '';
 for (let i = 0; i < pathSegments.length; i++) {
@@ -110,8 +122,11 @@ const breadcrumbSchema = {
             <a href="/conditions/" class="hover:text-brand-600 transition-colors">Conditions</a>
             <a href="/drugs/" class="hover:text-brand-600 transition-colors">Drug Prices</a>
             <a href="/drg/" class="hover:text-brand-600 transition-colors">Hospital Stays</a>
+            <a href="/hospitals/" class="hover:text-brand-600 transition-colors">Hospitals</a>
             <a href="/states/" class="hover:text-brand-600 transition-colors">By State</a>
             <a href="/estimator/" class="hover:text-brand-600 transition-colors">Estimator</a>
+            <a href="/what-will-i-pay/" class="text-emerald-600 font-semibold hover:text-emerald-700 transition-colors">What Will I Pay?</a>
+            <a href="/bill-checker/" class="text-green-600 font-semibold hover:text-green-700 transition-colors">Bill Checker</a>
             <a href="/settlement-calculator/" class="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Settlement</a>
             <!-- Search with autocomplete -->
             <div class="relative" id="search-container">
@@ -149,10 +164,16 @@ const breadcrumbSchema = {
           <a href="/conditions/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Conditions</a>
           <a href="/drugs/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Drug Prices</a>
           <a href="/drg/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Hospital Stays</a>
+          <a href="/hospitals/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Hospitals</a>
+          <a href="/insurers/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Insurers</a>
           <a href="/states/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">By State</a>
           <a href="/estimator/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Estimator</a>
           <a href="/my-costs/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">My Costs</a>
           <div class="border-t border-gray-100 pt-2 mt-2">
+            <a href="/what-will-i-pay/" class="block px-3 py-2.5 rounded-lg text-emerald-600 font-semibold hover:bg-emerald-50 transition-colors">What Will I Pay?</a>
+            <a href="/insurance-guide/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Insurance Guide</a>
+            <a href="/bill-checker/" class="block px-3 py-2.5 rounded-lg text-green-600 font-semibold hover:bg-green-50 transition-colors">Bill Checker</a>
+            <a href="/negotiate/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Negotiate Bills</a>
             <a href="/settlement-calculator/" class="block px-3 py-2.5 rounded-lg text-amber-600 font-semibold hover:bg-amber-50 transition-colors">Settlement Calculator</a>
           </div>
         </div>
@@ -178,18 +199,27 @@ const breadcrumbSchema = {
               <li><a href="/conditions/" class="hover:text-white">By Condition</a></li>
               <li><a href="/body-system/" class="hover:text-white">By Body System</a></li>
               <li><a href="/drugs/" class="hover:text-white">Drug Prices</a></li>
+              <li><a href="/drugs/glp1/" class="hover:text-white">GLP-1 Drug Costs</a></li>
+              <li><a href="/drugs/compare/" class="hover:text-white">Brand vs Generic</a></li>
               <li><a href="/drg/" class="hover:text-white">Hospital Stays</a></li>
+              <li><a href="/hospitals/" class="hover:text-white">Hospital Costs</a></li>
+              <li><a href="/insurers/" class="hover:text-white">Insurer Report Card</a></li>
             </ul>
           </div>
           <div>
             <h4 class="text-white font-semibold mb-3 text-sm">Tools & Info</h4>
             <ul class="space-y-2 text-sm">
+              <li><a href="/what-will-i-pay/" class="hover:text-white">What Will I Pay?</a></li>
+              <li><a href="/insurance-guide/" class="hover:text-white">Insurance Guide</a></li>
               <li><a href="/estimator/" class="hover:text-white">Cost Estimator</a></li>
               <li><a href="/my-costs/" class="hover:text-white">My Cost List</a></li>
               <li><a href="/compare/" class="hover:text-white">Compare Costs</a></li>
               <li><a href="/states/" class="hover:text-white">Costs by State</a></li>
               <li><a href="/states/map/" class="hover:text-white">US Cost Heat Map</a></li>
               <li><a href="/trends/" class="hover:text-white">Cost Trends</a></li>
+              <li><a href="/car-accident-costs/" class="hover:text-white">Car Accident Costs</a></li>
+              <li><a href="/bill-checker/" class="hover:text-white">Bill Checker</a></li>
+              <li><a href="/negotiate/" class="hover:text-white">Negotiate Bills</a></li>
               <li><a href="/about/" class="hover:text-white">About</a></li>
               <li><a href="/methodology/" class="hover:text-white">Methodology</a></li>
             </ul>

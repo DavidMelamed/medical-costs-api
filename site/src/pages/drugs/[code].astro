@@ -1,6 +1,8 @@
 ---
 import Base from '@/layouts/Base.astro';
-import { getDrug, formatCurrencyFull } from '@/lib/api';
+import { getDrug, getDrugComparison, formatCurrencyFull } from '@/lib/api';
+
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://medical-costs-api.david-568.workers.dev';
 
 const { code } = Astro.params;
 if (!code) return Astro.redirect('/drugs/');
@@ -13,8 +15,48 @@ const isBrand = d.category === 'Prescription Drug - Brand';
 const nadacPerUnit = d.nationalFacilityRate || d.nationalNonFacRate || 0;
 const est30Day = nadacPerUnit * 30;
 const est90Day = nadacPerUnit * 90;
+const estAnnual = nadacPerUnit * 365;
 const estRetailPerUnit = nadacPerUnit * 1.35; // ~35% pharmacy markup estimate
 const estRetail30Day = estRetailPerUnit * 30;
+const estRetailAnnual = estRetailPerUnit * 365;
+
+// Fetch generic alternatives for brand drugs
+let genericAlts: any[] = [];
+let brandName = '';
+if (isBrand) {
+  brandName = d.description.split(/\s+\d/)[0].trim();
+  try {
+    const comparison = await getDrugComparison(brandName);
+    if (comparison && comparison.generics) {
+      genericAlts = comparison.generics.slice(0, 5);
+    }
+  } catch {}
+}
+
+// Fetch similar drugs (same dosage form or related name)
+let similarDrugs: any[] = [];
+try {
+  const descParts = d.description.split(/\s+/);
+  const firstWord = descParts[0];
+  const res = await fetch(`${API_BASE}/api/procedures?category=Prescription+Drug&search=${encodeURIComponent(firstWord)}&limit=6&offset=0`);
+  const json = await res.json();
+  similarDrugs = (json.data || []).filter((sd: any) => sd.code !== code).slice(0, 5);
+} catch {}
+
+// Consumer-friendly description
+const drugDescriptions: Record<string, string> = {
+  'OZEMPIC': 'Ozempic is a once-weekly injectable prescription medicine for adults with type 2 diabetes to improve blood sugar control. It contains semaglutide, a GLP-1 receptor agonist that helps the body produce more insulin and reduces appetite.',
+  'WEGOVY': 'Wegovy is a once-weekly injectable prescription medicine for chronic weight management in adults with obesity (BMI 30+) or overweight (BMI 27+) with weight-related conditions. It contains semaglutide at higher doses than Ozempic.',
+  'MOUNJARO': 'Mounjaro is a once-weekly injectable prescription medicine for adults with type 2 diabetes. It contains tirzepatide, the first dual GIP/GLP-1 receptor agonist, which helps control blood sugar and has shown significant weight loss benefits.',
+  'ZEPBOUND': 'Zepbound is a once-weekly injectable for chronic weight management. It contains tirzepatide (same as Mounjaro) and has demonstrated the highest weight loss of any approved medication in clinical trials (up to 22.5%).',
+  'TRULICITY': 'Trulicity is a once-weekly injectable for type 2 diabetes. It contains dulaglutide, a GLP-1 receptor agonist that helps lower blood sugar and has demonstrated cardiovascular benefits.',
+  'RYBELSUS': 'Rybelsus is the only oral (tablet) GLP-1 medication, taken daily for type 2 diabetes. It contains semaglutide, the same active ingredient as Ozempic, but in pill form instead of injection.',
+  'METFORMIN': 'Metformin is the most commonly prescribed first-line medication for type 2 diabetes. It lowers blood sugar by reducing glucose production in the liver and improving insulin sensitivity. Available as an affordable generic.',
+  'LISINOPRIL': 'Lisinopril is an ACE inhibitor used to treat high blood pressure, heart failure, and to improve survival after a heart attack. It is one of the most prescribed medications in the US and is available as a very affordable generic.',
+  'ATORVASTATIN': 'Atorvastatin (generic Lipitor) is a statin used to lower cholesterol and reduce the risk of heart attack and stroke. It is the most prescribed cholesterol medication in the US.',
+  'AMOXICILLIN': 'Amoxicillin is a widely-used antibiotic for treating bacterial infections including ear infections, strep throat, pneumonia, and urinary tract infections. It is affordable and available in many generic forms.',
+};
+const consumerDesc = drugDescriptions[d.description.split(/\s+/)[0]] || null;
 
 function drugDisplayName(desc: string): string {
   return desc.split(' ').map((w: string, i: number) => {
@@ -141,7 +183,73 @@ const faqSchema = {
             <div class="text-2xl font-bold text-orange-700">{formatCurrencyFull(Math.round(estRetail30Day * 100) / 100)}</div>
             <div class="text-xs text-gray-400 mt-1">Without insurance</div>
           </div>
+          <div class="bg-white rounded-xl border border-red-200 p-5">
+            <div class="text-sm text-gray-500 mb-1">Est. Annual Cost</div>
+            <div class="text-2xl font-bold text-red-700">{formatCurrencyFull(Math.round(estRetailAnnual * 100) / 100)}</div>
+            <div class="text-xs text-gray-400 mt-1">Retail, 1 unit/day</div>
+          </div>
         </div>
+
+        {/* Consumer description */}
+        {consumerDesc && (
+          <div class="bg-blue-50 rounded-xl border border-blue-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-2">About {drugBaseNameFormatted}</h2>
+            <p class="text-gray-700">{consumerDesc}</p>
+          </div>
+        )}
+
+        {/* Generic Alternatives — for brand drugs */}
+        {isBrand && genericAlts.length > 0 && (
+          <div class="bg-white rounded-xl border border-green-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Generic Alternatives to {drugBaseNameFormatted}</h2>
+            <p class="text-sm text-gray-600 mb-3">
+              These generic drugs have similar dosage forms and may be alternatives. Ask your pharmacist or doctor about switching.
+            </p>
+            <div class="space-y-2">
+              {genericAlts.map((g: any) => (
+                <a href={`/drugs/${g.code}/`} class="flex justify-between items-center px-4 py-3 rounded-lg hover:bg-green-50 border border-gray-100 transition-colors">
+                  <div>
+                    <span class="text-sm font-medium text-gray-900">{drugDisplayName(g.description)}</span>
+                    <span class="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Generic</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-sm font-bold text-green-700">{formatNadacPrice(g.nadacPerUnit)}</span>
+                    {g.percentCheaper > 0 && (
+                      <div class="text-xs text-green-600">{g.percentCheaper}% less</div>
+                    )}
+                  </div>
+                </a>
+              ))}
+            </div>
+            <a href={`/drugs/compare/?brand=${encodeURIComponent(brandName.toLowerCase())}`} class="inline-block mt-3 text-sm text-brand-600 font-medium hover:underline">
+              See full comparison &rarr;
+            </a>
+          </div>
+        )}
+
+        {/* Similar Drugs */}
+        {similarDrugs.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Similar Drugs</h2>
+            <div class="space-y-2">
+              {similarDrugs.map((sd: any) => {
+                const sdNadac = sd.nationalFacilityRate || sd.nationalNonFacRate;
+                const sdIsBrand = sd.category === 'Prescription Drug - Brand';
+                return (
+                  <a href={`/drugs/${sd.code}/`} class="flex justify-between items-center px-4 py-3 rounded-lg hover:bg-gray-50 border border-gray-100 transition-colors">
+                    <div>
+                      <span class="text-sm font-medium text-gray-900">{drugDisplayName(sd.description)}</span>
+                      <span class={`ml-2 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${sdIsBrand ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                        {sdIsBrand ? 'Brand' : 'Generic'}
+                      </span>
+                    </div>
+                    <span class="text-sm font-semibold text-gray-900">{sdNadac ? formatNadacPrice(sdNadac) : '--'}</span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <!-- How pricing works -->
         <div class="bg-white rounded-xl border border-gray-200 p-6">
@@ -248,6 +356,12 @@ const faqSchema = {
           <ul class="space-y-2 text-sm">
             <li>
               <a href="/drugs/" class="text-brand-600 hover:underline">Browse All Drug Prices</a>
+            </li>
+            <li>
+              <a href="/drugs/compare/" class="text-brand-600 hover:underline">Brand vs Generic Comparison</a>
+            </li>
+            <li>
+              <a href="/drugs/glp1/" class="text-brand-600 hover:underline">GLP-1 Drug Costs</a>
             </li>
             <li>
               <a href={`/drugs/?type=${isBrand ? 'brand' : 'generic'}`} class="text-brand-600 hover:underline">

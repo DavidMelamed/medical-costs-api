@@ -1,0 +1,368 @@
+---
+import Base from '@/layouts/Base.astro';
+import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
+import { STATE_AUTO_INSURANCE, getStateSlug } from '@/lib/auto-insurance-data';
+
+const title = 'Car Accident Medical Costs — How Bills Get Paid | MedicalCosts.info';
+const description = 'Understand how medical bills get paid after a car accident. Payment priority: MedPay/PIP, health insurance, medical liens, settlement. Average BI claim: $29,400.';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How Medical Bills Get Paid After a Car Accident",
+  "description": description,
+  "author": { "@type": "Organization", "name": "MedicalCosts.info" },
+  "publisher": { "@type": "Organization", "name": "MedicalCosts.info" },
+  "datePublished": "2026-04-12",
+  "dateModified": "2026-04-12"
+};
+
+const commonInjuries = [
+  { name: 'Whiplash / Cervical Strain', slug: 'whiplash-cervical-strain', costRange: '$2,500 - $10,000' },
+  { name: 'Concussion / TBI', slug: 'traumatic-brain-injury', costRange: '$9,000 - $300,000+' },
+  { name: 'Fractures', slug: 'fractures', costRange: '$2,500 - $35,000' },
+  { name: 'Spinal Cord Injury', slug: 'spinal-cord-injury', costRange: '$15,000 - $1,000,000+' },
+  { name: 'Knee Injury (ACL/MCL)', slug: 'knee-injury', costRange: '$5,000 - $50,000' },
+  { name: 'Internal Organ Injury', slug: 'internal-organ-injury', costRange: '$15,000 - $200,000' },
+  { name: 'Burns', slug: 'burns', costRange: '$10,000 - $500,000+' },
+  { name: 'Rotator Cuff Tear', slug: 'rotator-cuff-tear', costRange: '$5,000 - $30,000' },
+];
+
+const noFaultStates = STATE_AUTO_INSURANCE.filter(s => s.faultSystem === 'no-fault');
+const choiceStates = STATE_AUTO_INSURANCE.filter(s => s.faultSystem === 'choice');
+const tortStates = STATE_AUTO_INSURANCE.filter(s => s.faultSystem === 'tort');
+---
+
+<Base title={title} description={description} canonical="/car-accident-costs/" schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Car Accident Costs</span>
+    </nav>
+
+    <!-- Hero -->
+    <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 md:p-12 mb-12 border border-blue-100">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How Medical Bills Get Paid After a Car Accident</h1>
+      <p class="text-lg text-gray-600 max-w-3xl mb-6">
+        Car accidents generate some of the highest medical bills in healthcare. The average bodily injury claim is now
+        <strong class="text-gray-900">$29,400</strong> (up 81% since 2016), and the payment process involves multiple
+        insurance layers, state-specific rules, and complex negotiations.
+      </p>
+      <div class="flex flex-wrap gap-4 text-sm">
+        <a href="#flowchart" class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">Payment Flowchart</a>
+        <a href="/car-accident-costs/who-pays/" class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">Who Pays?</a>
+        <a href="/car-accident-costs/self-pay/" class="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">Self-Pay Costs</a>
+        <a href="/settlement-calculator/" class="inline-flex items-center gap-1 px-4 py-2 bg-amber-100 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 font-semibold">Settlement Calculator</a>
+      </div>
+    </div>
+
+    <!-- Key stats -->
+    <div class="grid md:grid-cols-4 gap-4 mb-12">
+      <div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <div class="text-3xl font-bold text-brand-600">$29,400</div>
+        <div class="text-sm text-gray-500 mt-1">Average BI claim (2026)</div>
+        <div class="text-xs text-red-500 mt-1">Up 81% since 2016</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <div class="text-3xl font-bold text-brand-600">15.4%</div>
+        <div class="text-sm text-gray-500 mt-1">Drivers uninsured nationally</div>
+        <div class="text-xs text-gray-400 mt-1">IRC 2023 data</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <div class="text-3xl font-bold text-brand-600">$2,256</div>
+        <div class="text-sm text-gray-500 mt-1">Avg annual premium</div>
+        <div class="text-xs text-gray-400 mt-1">National average 2026</div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <div class="text-3xl font-bold text-brand-600">12</div>
+        <div class="text-sm text-gray-500 mt-1">States with no-fault PIP</div>
+        <div class="text-xs text-gray-400 mt-1">+ 3 choice states</div>
+      </div>
+    </div>
+
+    <!-- Payment Flowchart -->
+    <section id="flowchart" class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Medical Bill Payment Priority After a Crash</h2>
+      <p class="text-gray-600 mb-8">After a car accident, medical bills follow a specific payment hierarchy. Understanding this order is critical to maximizing your recovery.</p>
+
+      <div class="relative">
+        <!-- Flowchart steps -->
+        <div class="space-y-0">
+          <!-- Step 1: Accident -->
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.95L13.72 4.5a2 2 0 00-3.5 0L3.32 16.05A2 2 0 005.07 19z" /></svg>
+            </div>
+            <div class="flex-1 pb-8 border-l-2 border-gray-200 pl-8 ml-6 -mt-1">
+              <h3 class="text-lg font-bold text-gray-900">Accident Occurs</h3>
+              <p class="text-sm text-gray-500">Medical treatment begins immediately. ER visits, ambulance, imaging, surgery.</p>
+            </div>
+          </div>
+
+          <!-- Step 2: MedPay/PIP -->
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <span class="text-green-700 font-bold text-lg">1</span>
+            </div>
+            <div class="flex-1 pb-8 border-l-2 border-gray-200 pl-8 ml-6 -mt-1">
+              <div class="bg-green-50 rounded-xl p-5 border border-green-200">
+                <h3 class="text-lg font-bold text-green-800">MedPay / PIP Pays First</h3>
+                <p class="text-sm text-green-700 mt-1">Immediate: 0-30 days. No fault determination needed.</p>
+                <div class="mt-3 grid sm:grid-cols-2 gap-2 text-sm">
+                  <div class="bg-white rounded-lg p-3 border border-green-100">
+                    <span class="font-semibold text-gray-900">MedPay:</span> Medical bills only. Typical limits $2K-$25K. Optional in most states.
+                  </div>
+                  <div class="bg-white rounded-lg p-3 border border-green-100">
+                    <span class="font-semibold text-gray-900">PIP:</span> Medical + lost wages. Required in 12 states. Limits $3K-$50K.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Health Insurance -->
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <span class="text-blue-700 font-bold text-lg">2</span>
+            </div>
+            <div class="flex-1 pb-8 border-l-2 border-gray-200 pl-8 ml-6 -mt-1">
+              <div class="bg-blue-50 rounded-xl p-5 border border-blue-200">
+                <h3 class="text-lg font-bold text-blue-800">Health Insurance (Secondary Payer)</h3>
+                <p class="text-sm text-blue-700 mt-1">1-6 months. Once MedPay/PIP limits exhausted.</p>
+                <p class="text-sm text-gray-600 mt-2">Health insurance pays as secondary payer but has <strong>subrogation rights</strong> &mdash; they can seek reimbursement from your settlement.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Medical Liens -->
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+              <span class="text-purple-700 font-bold text-lg">3</span>
+            </div>
+            <div class="flex-1 pb-8 border-l-2 border-gray-200 pl-8 ml-6 -mt-1">
+              <div class="bg-purple-50 rounded-xl p-5 border border-purple-200">
+                <h3 class="text-lg font-bold text-purple-800">Medical Liens / Letters of Protection</h3>
+                <p class="text-sm text-purple-700 mt-1">3-18 months. Attorney issues LOP; providers defer payment.</p>
+                <p class="text-sm text-gray-600 mt-2">When insurance is insufficient, attorneys issue a Letter of Protection guaranteeing payment from the eventual settlement. Providers treat now, get paid later. Lien amounts can be <strong>negotiated down 30-50%</strong>.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 5: Settlement -->
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+              <span class="text-amber-700 font-bold text-lg">4</span>
+            </div>
+            <div class="flex-1 pb-0 pl-8 ml-6 -mt-1">
+              <div class="bg-amber-50 rounded-xl p-5 border border-amber-200">
+                <h3 class="text-lg font-bold text-amber-800">Settlement / BI Claim Pays Out</h3>
+                <p class="text-sm text-amber-700 mt-1">6 months - 3+ years. At-fault driver's BI insurance pays.</p>
+                <div class="mt-3 text-sm text-gray-600 space-y-1">
+                  <p>Settlement funds are distributed in order:</p>
+                  <ol class="list-decimal list-inside space-y-1 ml-2">
+                    <li>Attorney fees (typically 33-40%)</li>
+                    <li>Medical liens paid</li>
+                    <li>Health insurance subrogation repaid</li>
+                    <li><strong>Remaining to client</strong></li>
+                  </ol>
+                </div>
+                <div class="mt-3">
+                  <a href="/settlement-calculator/" class="text-amber-700 font-semibold text-sm hover:underline">Estimate your settlement value &rarr;</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Average BI claim trend -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Bodily Injury Claims Are Skyrocketing</h2>
+      <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="grid md:grid-cols-2 gap-8">
+          <div>
+            <p class="text-gray-600 mb-4">The average bodily injury liability claim has risen dramatically, driven by higher medical costs, faster driving speeds, and increased attorney involvement.</p>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200">
+                  <th class="text-left py-2 font-semibold text-gray-900">Year</th>
+                  <th class="text-right py-2 font-semibold text-gray-900">Average BI Claim</th>
+                  <th class="text-right py-2 font-semibold text-gray-900">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-gray-100"><td class="py-2">2016</td><td class="text-right">$16,082</td><td class="text-right text-gray-400">baseline</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2">2019</td><td class="text-right">$20,000</td><td class="text-right text-red-500">+24%</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2">2022</td><td class="text-right">$26,501</td><td class="text-right text-red-500">+65%</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2">2024</td><td class="text-right">$28,278</td><td class="text-right text-red-500">+76%</td></tr>
+                <tr><td class="py-2 font-semibold">2026 (est.)</td><td class="text-right font-semibold">$29,400</td><td class="text-right text-red-600 font-semibold">+81%</td></tr>
+              </tbody>
+            </table>
+            <p class="text-xs text-gray-400 mt-3">Source: Insurance Information Institute (III), Insurance Research Council</p>
+          </div>
+          <div class="flex items-center justify-center">
+            <!-- Simple SVG bar chart -->
+            <svg viewBox="0 0 300 200" class="w-full max-w-xs" role="img" aria-label="Bar chart showing BI claim growth from $16K in 2016 to $29K in 2026">
+              <rect x="20" y="140" width="40" height="55" fill="#93c5fd" rx="4" />
+              <text x="40" y="155" text-anchor="middle" class="text-[10px]" fill="#1e40af" font-size="10">$16K</text>
+              <text x="40" y="198" text-anchor="middle" fill="#6b7280" font-size="9">2016</text>
+
+              <rect x="80" y="115" width="40" height="80" fill="#60a5fa" rx="4" />
+              <text x="100" y="130" text-anchor="middle" fill="#1e40af" font-size="10">$20K</text>
+              <text x="100" y="198" text-anchor="middle" fill="#6b7280" font-size="9">2019</text>
+
+              <rect x="140" y="80" width="40" height="115" fill="#3b82f6" rx="4" />
+              <text x="160" y="95" text-anchor="middle" fill="#1e40af" font-size="10">$27K</text>
+              <text x="160" y="198" text-anchor="middle" fill="#6b7280" font-size="9">2022</text>
+
+              <rect x="200" y="70" width="40" height="125" fill="#2563eb" rx="4" />
+              <text x="220" y="85" text-anchor="middle" fill="#fff" font-size="10">$28K</text>
+              <text x="220" y="198" text-anchor="middle" fill="#6b7280" font-size="9">2024</text>
+
+              <rect x="260" y="55" width="40" height="140" fill="#1d4ed8" rx="4" />
+              <text x="280" y="72" text-anchor="middle" fill="#fff" font-size="10">$29K</text>
+              <text x="280" y="198" text-anchor="middle" fill="#6b7280" font-size="9">2026</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Common injuries with cost links -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Common Car Accident Injuries &amp; Treatment Costs</h2>
+      <p class="text-gray-600 mb-6">Click any injury to see detailed treatment costs, typical procedures, and expected timelines.</p>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        {commonInjuries.map(injury => (
+          <a href={`/conditions/${injury.slug}/`} class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-md transition-all flex items-center justify-between">
+            <div>
+              <h3 class="font-semibold text-gray-900">{injury.name}</h3>
+              <span class="text-sm text-gray-500">Treatment cost range</span>
+            </div>
+            <div class="text-right">
+              <span class="text-brand-600 font-bold">{injury.costRange}</span>
+              <div class="text-xs text-gray-400">View details &rarr;</div>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      <div class="mt-6 text-center">
+        <a href="/conditions/" class="text-brand-600 font-semibold hover:underline">View all injury cost data &rarr;</a>
+      </div>
+    </section>
+
+    <!-- ER visit link -->
+    <section class="mb-16">
+      <div class="bg-red-50 rounded-xl border border-red-200 p-6 md:p-8">
+        <h2 class="text-xl font-bold text-gray-900 mb-3">Average Emergency Room Visit After a Crash</h2>
+        <p class="text-gray-600 mb-4">
+          Most car accident victims start with an ER visit. A high-complexity ER visit (CPT 99285) has a Medicare
+          facility rate of <strong>$608</strong>, but commercial insurance and self-pay rates can be
+          <strong>2-5x higher</strong>. Typical total ER bills after a crash range from <strong>$1,500 to $10,000+</strong>
+          depending on imaging, procedures, and observation time.
+        </p>
+        <a href="/procedures/99285/" class="inline-flex items-center gap-2 text-red-700 font-semibold hover:underline">
+          See ER visit cost breakdown &rarr;
+        </a>
+      </div>
+    </section>
+
+    <!-- State insurance map section -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Auto Insurance Rules by State</h2>
+      <p class="text-gray-600 mb-6">Insurance rules vary dramatically by state. No-fault states require PIP coverage, while at-fault states rely on the liable driver's BI policy. Select your state for specific rules.</p>
+
+      <div class="grid md:grid-cols-3 gap-6 mb-8">
+        <!-- No-fault states -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+            <h3 class="font-bold text-gray-900">No-Fault States ({noFaultStates.length})</h3>
+          </div>
+          <p class="text-xs text-gray-500 mb-3">PIP pays first regardless of fault</p>
+          <div class="flex flex-wrap gap-1.5">
+            {noFaultStates.map(s => (
+              <a href={`/car-accident-costs/${getStateSlug(s.stateName)}/`} class="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded hover:bg-blue-100">{s.stateCode}</a>
+            ))}
+          </div>
+        </div>
+
+        <!-- Choice states -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+            <h3 class="font-bold text-gray-900">Choice States ({choiceStates.length})</h3>
+          </div>
+          <p class="text-xs text-gray-500 mb-3">Drivers choose no-fault or tort</p>
+          <div class="flex flex-wrap gap-1.5">
+            {choiceStates.map(s => (
+              <a href={`/car-accident-costs/${getStateSlug(s.stateName)}/`} class="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded hover:bg-purple-100">{s.stateCode}</a>
+            ))}
+          </div>
+        </div>
+
+        <!-- At-fault states -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-3 h-3 rounded-full bg-gray-500"></span>
+            <h3 class="font-bold text-gray-900">At-Fault / Tort States ({tortStates.length})</h3>
+          </div>
+          <p class="text-xs text-gray-500 mb-3">At-fault driver's insurance pays</p>
+          <div class="flex flex-wrap gap-1.5">
+            {tortStates.map(s => (
+              <a href={`/car-accident-costs/${getStateSlug(s.stateName)}/`} class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">{s.stateCode}</a>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <!-- Full state list -->
+      <details class="bg-white rounded-xl border border-gray-200">
+        <summary class="px-6 py-4 cursor-pointer font-semibold text-gray-900 hover:bg-gray-50">View All 51 State Auto Insurance Pages</summary>
+        <div class="px-6 pb-6 grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-sm">
+          {STATE_AUTO_INSURANCE.sort((a, b) => a.stateName.localeCompare(b.stateName)).map(s => (
+            <a href={`/car-accident-costs/${getStateSlug(s.stateName)}/`} class="text-brand-600 hover:underline">{s.stateName}</a>
+          ))}
+        </div>
+      </details>
+    </section>
+
+    <!-- Deep dive links -->
+    <section class="mb-16">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Understand the Full Picture</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <a href="/car-accident-costs/who-pays/" class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Who Pays Your Medical Bills?</h3>
+          <p class="text-gray-500 text-sm">Deep dive into MedPay vs PIP vs BI vs health insurance. What happens when you're uninsured. How subrogation works.</p>
+        </a>
+        <a href="/car-accident-costs/self-pay/" class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Self-Pay &amp; Uninsured After a Crash</h3>
+          <p class="text-gray-500 text-sm">Chargemaster rates are 164% higher than negotiated rates. How to negotiate hospital bills. No Surprises Act protections.</p>
+        </a>
+        <a href="/settlement-calculator/" class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Settlement Calculator</h3>
+          <p class="text-gray-500 text-sm">Estimate your injury claim value based on medical costs, severity multipliers, and lost wages.</p>
+        </a>
+        <a href="/estimator/" class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md hover:border-brand-300 transition-all">
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Medical Cost Estimator</h3>
+          <p class="text-gray-500 text-sm">Look up the cost of any medical procedure by CPT code. Compare Medicare, commercial, and hospital rates.</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- CrashStory CTA -->
+    <CrashStoryCTA
+      heading="Injured in a Car Accident in Colorado?"
+      body="CrashStory.com connects you with experienced personal injury attorneys who handle car accident cases on contingency (no fee unless you win). Average settlement with representation: $77,600 vs $17,600 without."
+      utmContent="car-accident-costs-landing"
+      className="mb-12"
+    />
+
+  </div>
+</Base>

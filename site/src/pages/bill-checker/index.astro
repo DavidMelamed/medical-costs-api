@@ -1,0 +1,478 @@
+---
+import Base from '@/layouts/Base.astro';
+import { STATES } from '@/lib/api';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Medical Bill Checker",
+  "url": "https://medicalcosts.info/bill-checker/",
+  "applicationCategory": "HealthApplication",
+  "description": "Check if your medical bill is reasonable by comparing it to Medicare rates, average commercial insurance rates, and hospital negotiated rates.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do I know if my medical bill is too high?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Compare your bill to Medicare rates (publicly available), which represent the federal government's benchmark. Most commercial insurance pays 150-250% of Medicare. If your bill exceeds 300% of Medicare, it is likely above average and worth negotiating."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is a fair price for a medical procedure?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A fair price for most medical procedures falls between 150% and 250% of the Medicare reimbursement rate. This range reflects typical commercial insurance negotiated rates. Anything above 300% of Medicare is generally considered high."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I negotiate my medical bill?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Studies show that up to 80% of medical bills contain errors, and most hospitals will negotiate, especially for uninsured or underinsured patients. Having data on Medicare rates and average commercial prices strengthens your position."
+      }
+    }
+  ]
+};
+---
+
+<Base
+  title="Is Your Medical Bill Too High? Free Bill Checker | MedicalCosts.info"
+  description="Check if your medical bill is reasonable. Compare what you were charged against Medicare rates, average commercial insurance prices, and hospital negotiated rates for any CPT code."
+  canonical="/bill-checker/"
+  schema={schema}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+
+  <section class="bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 text-white py-12 sm:py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight mb-4">
+        Check If Your Medical Bill Is Reasonable
+      </h1>
+      <p class="text-lg sm:text-xl text-brand-100 max-w-2xl mx-auto">
+        Enter your CPT code and billed amount. We'll compare it to Medicare rates, commercial insurance averages, and hospital negotiated prices.
+      </p>
+    </div>
+  </section>
+
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10 mb-12">
+    <!-- Bill Check Form -->
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 sm:p-8">
+      <form id="bill-check-form" class="space-y-6">
+        <div class="grid sm:grid-cols-2 gap-6">
+          <!-- Procedure search / CPT code -->
+          <div class="sm:col-span-2">
+            <label for="procedure-search" class="block text-sm font-semibold text-gray-700 mb-1">Procedure Name or CPT Code</label>
+            <div class="relative">
+              <input
+                id="procedure-search"
+                type="text"
+                placeholder="e.g., 99285 or ER Visit"
+                autocomplete="off"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-lg"
+              />
+              <div id="search-results" class="hidden absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto"></div>
+            </div>
+            <input type="hidden" id="cpt-code" />
+            <p id="selected-procedure" class="mt-1 text-sm text-brand-600 font-medium hidden"></p>
+          </div>
+
+          <!-- Billed amount -->
+          <div>
+            <label for="billed-amount" class="block text-sm font-semibold text-gray-700 mb-1">Amount You Were Billed</label>
+            <div class="relative">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg font-medium">$</span>
+              <input
+                id="billed-amount"
+                type="number"
+                min="1"
+                step="0.01"
+                placeholder="2,500"
+                class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-lg"
+              />
+            </div>
+          </div>
+
+          <!-- State -->
+          <div>
+            <label for="state-select" class="block text-sm font-semibold text-gray-700 mb-1">Your State</label>
+            <select id="state-select" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-900 text-lg bg-white">
+              <option value="">National Average</option>
+              {STATES.map(s => (
+                <option value={s.code}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          id="check-btn"
+          class="w-full sm:w-auto px-8 py-3 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Check My Bill
+        </button>
+      </form>
+    </div>
+
+    <!-- Results Section (hidden until submit) -->
+    <div id="results-section" class="hidden mt-8">
+      <!-- Loading -->
+      <div id="results-loading" class="hidden text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-brand-200 border-t-brand-600"></div>
+        <p class="mt-3 text-gray-500">Analyzing your bill...</p>
+      </div>
+
+      <!-- Error -->
+      <div id="results-error" class="hidden bg-red-50 border border-red-200 rounded-xl p-6 text-red-700"></div>
+
+      <!-- Results -->
+      <div id="results-content" class="hidden space-y-6">
+        <!-- Verdict Card -->
+        <div id="verdict-card" class="rounded-2xl shadow-lg border-2 p-6 sm:p-8">
+          <div class="flex items-start gap-4">
+            <div id="verdict-icon" class="text-4xl flex-shrink-0"></div>
+            <div>
+              <h2 class="text-xl sm:text-2xl font-bold" id="verdict-title"></h2>
+              <p class="mt-1 text-gray-600" id="verdict-text"></p>
+            </div>
+          </div>
+          <div id="verdict-percentile" class="mt-4 text-sm font-medium"></div>
+        </div>
+
+        <!-- Rate Comparison -->
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 sm:p-8">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">Rate Comparison</h3>
+          <div class="space-y-4" id="rate-comparison"></div>
+          <!-- Visual bar chart -->
+          <div class="mt-6" id="bar-chart"></div>
+        </div>
+
+        <!-- What You Can Do -->
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 sm:p-8">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">What You Can Do</h3>
+          <div id="action-steps" class="space-y-3"></div>
+          <div class="mt-6 flex flex-wrap gap-3">
+            <a href="/negotiate/" class="inline-flex items-center px-5 py-2.5 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors">
+              Read Our Negotiation Guide
+            </a>
+            <a href="/negotiate/letter/" class="inline-flex items-center px-5 py-2.5 bg-white border-2 border-brand-600 text-brand-700 font-semibold rounded-lg hover:bg-brand-50 transition-colors">
+              Generate a Negotiation Letter
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <h2 class="text-2xl font-bold text-gray-900 mb-8 text-center">How This Works</h2>
+    <div class="grid sm:grid-cols-3 gap-6">
+      <div class="text-center">
+        <div class="w-12 h-12 bg-brand-100 text-brand-700 rounded-xl flex items-center justify-center mx-auto mb-3 text-xl font-bold">1</div>
+        <h3 class="font-semibold text-gray-900 mb-1">Enter Your Bill</h3>
+        <p class="text-sm text-gray-500">Type in the CPT code from your bill and the amount charged.</p>
+      </div>
+      <div class="text-center">
+        <div class="w-12 h-12 bg-brand-100 text-brand-700 rounded-xl flex items-center justify-center mx-auto mb-3 text-xl font-bold">2</div>
+        <h3 class="font-semibold text-gray-900 mb-1">We Compare Rates</h3>
+        <p class="text-sm text-gray-500">We check against Medicare rates, hospital negotiated rates, and commercial insurance averages.</p>
+      </div>
+      <div class="text-center">
+        <div class="w-12 h-12 bg-brand-100 text-brand-700 rounded-xl flex items-center justify-center mx-auto mb-3 text-xl font-bold">3</div>
+        <h3 class="font-semibold text-gray-900 mb-1">Get Your Verdict</h3>
+        <p class="text-sm text-gray-500">See if your bill is reasonable, plus specific action steps if it's too high.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+    <h2 class="text-2xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+    <div class="space-y-4">
+      <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+          How do I know if my medical bill is too high?
+          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-6 pb-4 text-gray-600 text-sm">
+          Compare your bill to Medicare rates (publicly available), which represent the federal government's benchmark. Most commercial insurance pays 150-250% of Medicare. If your bill exceeds 300% of Medicare, it is likely above average and worth negotiating.
+        </div>
+      </details>
+      <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+          What is a fair price for a medical procedure?
+          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-6 pb-4 text-gray-600 text-sm">
+          A fair price for most medical procedures falls between 150% and 250% of the Medicare reimbursement rate. This range reflects typical commercial insurance negotiated rates. Anything above 300% of Medicare is generally considered high.
+        </div>
+      </details>
+      <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+          Can I negotiate my medical bill?
+          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-6 pb-4 text-gray-600 text-sm">
+          Yes. Studies show that up to 80% of medical bills contain errors, and most hospitals will negotiate, especially for uninsured or underinsured patients. Having data on Medicare rates and average commercial prices strengthens your position significantly.
+        </div>
+      </details>
+      <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+          Where does this data come from?
+          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-6 pb-4 text-gray-600 text-sm">
+          We use publicly available data from CMS Medicare Physician Fee Schedule (2026), CMS OPPS/ASC rates, geographic practice cost indices (GPCI), and hospital Machine-Readable Files (price transparency data) mandated by the federal government.
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <script>
+    const API = 'https://medical-costs-api.david-568.workers.dev';
+    const searchInput = document.getElementById('procedure-search') as HTMLInputElement;
+    const searchResults = document.getElementById('search-results')!;
+    const cptCodeInput = document.getElementById('cpt-code') as HTMLInputElement;
+    const selectedProc = document.getElementById('selected-procedure')!;
+    const form = document.getElementById('bill-check-form')!;
+    const resultsSection = document.getElementById('results-section')!;
+    const resultsLoading = document.getElementById('results-loading')!;
+    const resultsError = document.getElementById('results-error')!;
+    const resultsContent = document.getElementById('results-content')!;
+
+    function fmt(n: number | null | undefined): string {
+      if (n == null) return 'N/A';
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+    }
+
+    // Search autocomplete
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim();
+      if (debounce) clearTimeout(debounce);
+      if (q.length < 2) { searchResults.classList.add('hidden'); return; }
+
+      debounce = setTimeout(async () => {
+        try {
+          const res = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&limit=8`);
+          const json = await res.json();
+          if (!json.success) return;
+
+          const procs = (json.data.procedures || []).slice(0, 6);
+          if (procs.length === 0) {
+            searchResults.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500">No procedures found</div>';
+            searchResults.classList.remove('hidden');
+            return;
+          }
+
+          searchResults.innerHTML = procs.map((p: any) =>
+            `<button type="button" class="search-pick w-full text-left block px-4 py-2.5 hover:bg-brand-50 border-b border-gray-50 transition-colors" data-code="${p.code}" data-name="${(p.consumerName || p.description).replace(/"/g, '&quot;')}">
+              <div class="text-sm font-medium text-gray-900">${p.consumerName || p.description}</div>
+              <div class="text-xs text-gray-500 font-mono">CPT ${p.code}${p.nationalFacilityRate ? ' &mdash; Medicare: ' + fmt(p.nationalFacilityRate) : ''}</div>
+            </button>`
+          ).join('');
+          searchResults.classList.remove('hidden');
+
+          searchResults.querySelectorAll('.search-pick').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const code = (btn as HTMLElement).dataset.code!;
+              const name = (btn as HTMLElement).dataset.name!;
+              cptCodeInput.value = code;
+              searchInput.value = code;
+              selectedProc.textContent = `${name} (CPT ${code})`;
+              selectedProc.classList.remove('hidden');
+              searchResults.classList.add('hidden');
+            });
+          });
+        } catch {}
+      }, 250);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('#procedure-search, #search-results')) {
+        searchResults.classList.add('hidden');
+      }
+    });
+
+    // If user types a valid CPT code directly
+    searchInput.addEventListener('blur', () => {
+      const v = searchInput.value.trim();
+      if (/^\d{4,5}[A-Z]?$/.test(v) && !cptCodeInput.value) {
+        cptCodeInput.value = v;
+      }
+    });
+
+    // Form submit
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = cptCodeInput.value || searchInput.value.trim();
+      const amount = (document.getElementById('billed-amount') as HTMLInputElement).value;
+      const state = (document.getElementById('state-select') as HTMLSelectElement).value;
+
+      if (!code) { alert('Please enter a CPT code or search for a procedure.'); return; }
+      if (!amount || parseFloat(amount) <= 0) { alert('Please enter the amount you were billed.'); return; }
+
+      resultsSection.classList.remove('hidden');
+      resultsLoading.classList.remove('hidden');
+      resultsError.classList.add('hidden');
+      resultsContent.classList.add('hidden');
+
+      try {
+        const params = new URLSearchParams({ code, amount });
+        if (state) params.set('state', state);
+        const res = await fetch(`${API}/api/bill-check?${params}`);
+        const json = await res.json();
+
+        resultsLoading.classList.add('hidden');
+
+        if (!json.success) {
+          resultsError.textContent = json.error || 'Unable to check this bill. Please verify the CPT code.';
+          resultsError.classList.remove('hidden');
+          return;
+        }
+
+        const d = json.data;
+        renderResults(d);
+      } catch (err) {
+        resultsLoading.classList.add('hidden');
+        resultsError.textContent = 'Network error. Please try again.';
+        resultsError.classList.remove('hidden');
+      }
+    });
+
+    function renderResults(d: any) {
+      resultsContent.classList.remove('hidden');
+
+      // Verdict card
+      const card = document.getElementById('verdict-card')!;
+      const icon = document.getElementById('verdict-icon')!;
+      const title = document.getElementById('verdict-title')!;
+      const text = document.getElementById('verdict-text')!;
+      const pctEl = document.getElementById('verdict-percentile')!;
+
+      card.className = 'rounded-2xl shadow-lg border-2 p-6 sm:p-8 ';
+      if (d.verdict.level === 'low') {
+        card.className += 'bg-green-50 border-green-300';
+        icon.innerHTML = '&#10003;';
+        icon.className = 'text-4xl flex-shrink-0 text-green-600';
+        title.textContent = 'Good Price';
+        title.className = 'text-xl sm:text-2xl font-bold text-green-800';
+      } else if (d.verdict.level === 'fair') {
+        card.className += 'bg-blue-50 border-blue-300';
+        icon.innerHTML = '&#10003;';
+        icon.className = 'text-4xl flex-shrink-0 text-blue-600';
+        title.textContent = 'Fair Price';
+        title.className = 'text-xl sm:text-2xl font-bold text-blue-800';
+      } else if (d.verdict.level === 'high') {
+        card.className += 'bg-amber-50 border-amber-300';
+        icon.innerHTML = '&#9888;';
+        icon.className = 'text-4xl flex-shrink-0 text-amber-600';
+        title.textContent = 'Above Average';
+        title.className = 'text-xl sm:text-2xl font-bold text-amber-800';
+      } else {
+        card.className += 'bg-red-50 border-red-300';
+        icon.innerHTML = '&#9888;';
+        icon.className = 'text-4xl flex-shrink-0 text-red-600';
+        title.textContent = 'Significantly High';
+        title.className = 'text-xl sm:text-2xl font-bold text-red-800';
+      }
+
+      text.textContent = d.verdict.text;
+
+      if (d.percentile != null) {
+        pctEl.innerHTML = `Your bill is higher than <strong>${d.percentile}%</strong> of negotiated rates we've seen for this procedure.`;
+        pctEl.classList.remove('hidden');
+      } else {
+        pctEl.classList.add('hidden');
+      }
+
+      // Rate comparison
+      const comp = document.getElementById('rate-comparison')!;
+      const rows = [
+        { label: 'Your Bill', value: d.billedAmount, highlight: true },
+        { label: 'Medicare Rate', value: d.medicareRate },
+        { label: 'Hospital Outpatient (OPPS)', value: d.hospitalOutpatientRate },
+        { label: 'ASC Rate', value: d.ascRate },
+        { label: 'Fair Price Range (150-250% of Medicare)', value: d.fairPriceRange ? `${fmt(d.fairPriceRange.low)} - ${fmt(d.fairPriceRange.high)}` : null, isRange: true },
+        { label: 'Commercial Average', value: d.commercialEstimate?.average },
+      ];
+
+      if (d.negotiatedRates) {
+        rows.push({ label: `Negotiated Rate Range (${d.negotiatedRates.count} rates)`, value: `${fmt(d.negotiatedRates.min)} - ${fmt(d.negotiatedRates.max)}`, isRange: true });
+      }
+
+      comp.innerHTML = rows.filter(r => r.value != null).map(r => {
+        const val = r.isRange ? r.value : fmt(r.value as number);
+        return `<div class="flex items-center justify-between py-2 ${r.highlight ? 'bg-gray-50 rounded-lg px-3 font-bold text-gray-900' : 'text-gray-700 border-b border-gray-100 px-1'}">
+          <span class="text-sm">${r.label}</span>
+          <span class="font-semibold tabular-nums ${r.highlight ? 'text-lg' : ''}">${val}</span>
+        </div>`;
+      }).join('');
+
+      // Bar chart
+      const chartEl = document.getElementById('bar-chart')!;
+      const chartData = [
+        { label: 'Medicare', value: d.medicareRate, color: 'bg-blue-400' },
+        { label: 'OPPS', value: d.hospitalOutpatientRate, color: 'bg-teal-400' },
+        { label: 'Commercial Avg', value: d.commercialEstimate?.average, color: 'bg-purple-400' },
+        { label: 'Your Bill', value: d.billedAmount, color: d.verdict.level === 'low' || d.verdict.level === 'fair' ? 'bg-green-500' : d.verdict.level === 'high' ? 'bg-amber-500' : 'bg-red-500' },
+      ].filter(b => b.value != null && b.value > 0);
+
+      if (chartData.length > 1) {
+        const maxVal = Math.max(...chartData.map(b => b.value));
+        chartEl.innerHTML = '<div class="space-y-2">' + chartData.map(b =>
+          `<div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500 w-28 text-right flex-shrink-0">${b.label}</span>
+            <div class="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+              <div class="${b.color} h-full rounded-full transition-all duration-500" style="width:${Math.max((b.value / maxVal) * 100, 2)}%"></div>
+              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-700">${fmt(b.value)}</span>
+            </div>
+          </div>`
+        ).join('') + '</div>';
+      }
+
+      // Action steps
+      const actions = document.getElementById('action-steps')!;
+      const steps = [];
+
+      if (d.verdict.level === 'high' || d.verdict.level === 'very_high') {
+        steps.push(
+          { icon: '1', text: '<strong>Request an itemized bill</strong> (UB-04 or HCFA 1500 form) to check for errors and duplicate charges.' },
+          { icon: '2', text: `<strong>Know your benchmark:</strong> Medicare pays ${fmt(d.medicareRate)} for this procedure. A fair commercial price is ${d.fairPriceRange ? fmt(d.fairPriceRange.low) + ' - ' + fmt(d.fairPriceRange.high) : 'typically 150-250% of Medicare'}.` },
+          { icon: '3', text: '<strong>Call the billing department</strong> and reference these rates. Ask for a reduction to a "fair and customary" rate.' },
+          { icon: '4', text: '<strong>Ask about financial hardship discounts</strong> &mdash; hospitals typically offer 20-40% reductions.' },
+          { icon: '5', text: '<strong>Negotiate a payment plan</strong> if you cannot pay in full. Most hospitals offer interest-free plans.' },
+        );
+        if (d.verdict.level === 'very_high') {
+          steps.push(
+            { icon: '6', text: '<strong>File a complaint</strong> with your state insurance department or attorney general if the provider won\'t negotiate.' },
+            { icon: '7', text: '<strong>Consider a patient advocate</strong> or medical billing advocate who can negotiate on your behalf (typical fee: 25-35% of savings).' },
+          );
+        }
+      } else {
+        steps.push(
+          { icon: '&#10003;', text: 'Your bill appears to be within the normal range. Still, <strong>always request an itemized bill</strong> to check for errors.' },
+          { icon: '&#128161;', text: 'Even with a fair price, you can often <strong>negotiate a 10-20% prompt-pay discount</strong> if you pay in full.' },
+          { icon: '&#128176;', text: 'Ask about <strong>financial hardship programs</strong> if you are struggling to pay &mdash; most hospitals have them.' },
+        );
+      }
+
+      actions.innerHTML = steps.map(s =>
+        `<div class="flex items-start gap-3 text-sm text-gray-700">
+          <span class="flex-shrink-0 w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-xs">${s.icon}</span>
+          <span>${s.text}</span>
+        </div>`
+      ).join('');
+    }
+  </script>
+</Base>

@@ -1,0 +1,363 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "How to Negotiate Your Medical Bill",
+  "description": "A step-by-step guide to negotiating medical bills using data from Medicare rates and hospital price transparency files.",
+  "step": [
+    { "@type": "HowToStep", "name": "Get an Itemized Bill", "text": "Request a UB-04 or HCFA 1500 form from the billing department listing every charge with CPT codes." },
+    { "@type": "HowToStep", "name": "Look Up Each CPT Code", "text": "Search each code on MedicalCosts.info to find the Medicare reimbursement rate." },
+    { "@type": "HowToStep", "name": "Compare to Medicare Rate", "text": "Note the Medicare rate for each procedure. This is the baseline federal benchmark." },
+    { "@type": "HowToStep", "name": "Calculate Fair Price Range", "text": "Multiply the Medicare rate by 1.5 to 2.5 to get the typical commercial insurance price range." },
+    { "@type": "HowToStep", "name": "Call the Billing Department", "text": "Contact the billing department with your specific numbers and request a reduction." },
+    { "@type": "HowToStep", "name": "Request Financial Hardship Discount", "text": "Ask about charity care or financial assistance programs for a 20-40% discount." },
+    { "@type": "HowToStep", "name": "Negotiate a Payment Plan", "text": "If you cannot pay in full, most providers offer interest-free payment plans." },
+    { "@type": "HowToStep", "name": "Escalate If Needed", "text": "File a complaint with your state insurance department if the provider refuses to negotiate." }
+  ]
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What percentage of medical bills can be negotiated?", "acceptedAnswer": { "@type": "Answer", "text": "Studies show roughly 50-80% of medical bills can be successfully negotiated. Uninsured patients and those with high-deductible plans typically have the most leverage." } },
+    { "@type": "Question", "name": "How much can I typically save by negotiating?", "acceptedAnswer": { "@type": "Answer", "text": "On average, patients save 30-60% off their original bill through negotiation. Financial hardship programs can reduce bills by 20-100% depending on income." } },
+    { "@type": "Question", "name": "When should I negotiate my medical bill?", "acceptedAnswer": { "@type": "Answer", "text": "Negotiate before the bill goes to collections — ideally within 30-60 days of receiving it. The billing department has more flexibility than a collections agency." } },
+    { "@type": "Question", "name": "What is the Medicare rate and why does it matter?", "acceptedAnswer": { "@type": "Answer", "text": "The Medicare rate is what the federal government pays for each procedure. It serves as a national pricing benchmark. Commercial insurance typically pays 150-250% of Medicare, so anything above 300% is generally above market rate." } },
+    { "@type": "Question", "name": "Can I negotiate a bill that insurance already paid partially?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can negotiate your remaining balance (co-pay, coinsurance, or deductible portion). Request an itemized bill, check for errors, and negotiate the patient-responsibility amount." } }
+  ]
+};
+
+const stateInsuranceDepts = [
+  { state: 'Alabama', code: 'AL', url: 'https://www.aldoi.gov/' },
+  { state: 'Alaska', code: 'AK', url: 'https://www.commerce.alaska.gov/web/ins/' },
+  { state: 'Arizona', code: 'AZ', url: 'https://insurance.az.gov/' },
+  { state: 'Arkansas', code: 'AR', url: 'https://insurance.arkansas.gov/' },
+  { state: 'California', code: 'CA', url: 'https://www.insurance.ca.gov/' },
+  { state: 'Colorado', code: 'CO', url: 'https://doi.colorado.gov/' },
+  { state: 'Connecticut', code: 'CT', url: 'https://portal.ct.gov/cid' },
+  { state: 'Delaware', code: 'DE', url: 'https://insurance.delaware.gov/' },
+  { state: 'Florida', code: 'FL', url: 'https://www.myfloridacfo.com/division/consumers/' },
+  { state: 'Georgia', code: 'GA', url: 'https://oci.georgia.gov/' },
+  { state: 'Hawaii', code: 'HI', url: 'https://cca.hawaii.gov/ins/' },
+  { state: 'Idaho', code: 'ID', url: 'https://doi.idaho.gov/' },
+  { state: 'Illinois', code: 'IL', url: 'https://insurance.illinois.gov/' },
+  { state: 'Indiana', code: 'IN', url: 'https://www.in.gov/idoi/' },
+  { state: 'Iowa', code: 'IA', url: 'https://iid.iowa.gov/' },
+  { state: 'Kansas', code: 'KS', url: 'https://insurance.kansas.gov/' },
+  { state: 'Kentucky', code: 'KY', url: 'https://insurance.ky.gov/' },
+  { state: 'Louisiana', code: 'LA', url: 'https://www.ldi.la.gov/' },
+  { state: 'Maine', code: 'ME', url: 'https://www.maine.gov/pfr/insurance/' },
+  { state: 'Maryland', code: 'MD', url: 'https://insurance.maryland.gov/' },
+  { state: 'Massachusetts', code: 'MA', url: 'https://www.mass.gov/orgs/division-of-insurance' },
+  { state: 'Michigan', code: 'MI', url: 'https://www.michigan.gov/difs' },
+  { state: 'Minnesota', code: 'MN', url: 'https://mn.gov/commerce/insurance/' },
+  { state: 'Mississippi', code: 'MS', url: 'https://www.mid.ms.gov/' },
+  { state: 'Missouri', code: 'MO', url: 'https://insurance.mo.gov/' },
+  { state: 'Montana', code: 'MT', url: 'https://csimt.gov/' },
+  { state: 'Nebraska', code: 'NE', url: 'https://doi.nebraska.gov/' },
+  { state: 'Nevada', code: 'NV', url: 'https://doi.nv.gov/' },
+  { state: 'New Hampshire', code: 'NH', url: 'https://www.nh.gov/insurance/' },
+  { state: 'New Jersey', code: 'NJ', url: 'https://www.state.nj.us/dobi/' },
+  { state: 'New Mexico', code: 'NM', url: 'https://www.osi.state.nm.us/' },
+  { state: 'New York', code: 'NY', url: 'https://www.dfs.ny.gov/' },
+  { state: 'North Carolina', code: 'NC', url: 'https://www.ncdoi.gov/' },
+  { state: 'North Dakota', code: 'ND', url: 'https://www.insurance.nd.gov/' },
+  { state: 'Ohio', code: 'OH', url: 'https://insurance.ohio.gov/' },
+  { state: 'Oklahoma', code: 'OK', url: 'https://www.oid.ok.gov/' },
+  { state: 'Oregon', code: 'OR', url: 'https://dfr.oregon.gov/' },
+  { state: 'Pennsylvania', code: 'PA', url: 'https://www.insurance.pa.gov/' },
+  { state: 'Rhode Island', code: 'RI', url: 'https://dbr.ri.gov/insurance/' },
+  { state: 'South Carolina', code: 'SC', url: 'https://doi.sc.gov/' },
+  { state: 'South Dakota', code: 'SD', url: 'https://dlr.sd.gov/insurance/' },
+  { state: 'Tennessee', code: 'TN', url: 'https://www.tn.gov/commerce/insurance.html' },
+  { state: 'Texas', code: 'TX', url: 'https://www.tdi.texas.gov/' },
+  { state: 'Utah', code: 'UT', url: 'https://insurance.utah.gov/' },
+  { state: 'Vermont', code: 'VT', url: 'https://dfr.vermont.gov/' },
+  { state: 'Virginia', code: 'VA', url: 'https://scc.virginia.gov/pages/Bureau-of-Insurance' },
+  { state: 'Washington', code: 'WA', url: 'https://www.insurance.wa.gov/' },
+  { state: 'West Virginia', code: 'WV', url: 'https://www.wvinsurance.gov/' },
+  { state: 'Wisconsin', code: 'WI', url: 'https://oci.wi.gov/' },
+  { state: 'Wyoming', code: 'WY', url: 'https://doi.wyo.gov/' },
+  { state: 'Washington DC', code: 'DC', url: 'https://disb.dc.gov/' },
+];
+---
+
+<Base
+  title="How to Negotiate Your Medical Bill -- Data-Backed Guide | MedicalCosts.info"
+  description="Step-by-step guide to negotiating medical bills using Medicare rate data, hospital price transparency information, and proven negotiation strategies. Includes sample letter and state resources."
+  canonical="/negotiate/"
+  schema={schema}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+
+  <section class="bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 text-white py-12 sm:py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight mb-4">
+        How to Negotiate Your Medical Bill (With Data)
+      </h1>
+      <p class="text-lg sm:text-xl text-brand-100 max-w-3xl">
+        The average hospital charges 2.5x what Medicare pays. Here is a step-by-step guide to getting your bill reduced using publicly available pricing data.
+      </p>
+      <div class="flex flex-wrap gap-3 mt-6">
+        <a href="/bill-checker/" class="inline-flex items-center px-5 py-2.5 bg-white text-brand-700 font-semibold rounded-lg hover:bg-gray-100 transition-colors text-sm">
+          Check Your Bill First
+        </a>
+        <a href="/negotiate/letter/" class="inline-flex items-center px-5 py-2.5 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-400 transition-colors text-sm border border-brand-400">
+          Generate a Negotiation Letter
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <article class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- Key Stats -->
+    <div class="grid sm:grid-cols-3 gap-4 mb-12">
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+        <div class="text-3xl font-extrabold text-amber-700">80%</div>
+        <div class="text-sm text-amber-600 mt-1">of medical bills contain errors</div>
+      </div>
+      <div class="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
+        <div class="text-3xl font-extrabold text-green-700">30-60%</div>
+        <div class="text-sm text-green-600 mt-1">average savings from negotiation</div>
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 text-center">
+        <div class="text-3xl font-extrabold text-blue-700">2.5x</div>
+        <div class="text-sm text-blue-600 mt-1">what hospitals charge vs. Medicare</div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="space-y-10">
+      <!-- Step 1 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">1</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Get an Itemized Bill</h2>
+        <p class="text-gray-600 mb-3">Call the billing department and request a <strong>UB-04</strong> (hospital) or <strong>HCFA 1500</strong> (physician) itemized bill. This is different from the summary statement you receive in the mail.</p>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
+          <p class="font-semibold text-gray-800 mb-2">What to look for:</p>
+          <ul class="list-disc list-inside space-y-1 text-gray-600">
+            <li>Individual CPT/HCPCS codes for every procedure and service</li>
+            <li>Duplicate charges (same code billed twice)</li>
+            <li>Unbundled charges (services that should be one charge split into many)</li>
+            <li>Charges for services you did not receive</li>
+            <li>Upcoding (a more expensive code than the service actually provided)</li>
+          </ul>
+        </div>
+        <p class="text-sm text-gray-500 mt-2">Tip: Under federal law, hospitals must provide itemized bills within 30 days of a written request.</p>
+      </section>
+
+      <!-- Step 2 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">2</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Look Up Each CPT Code</h2>
+        <p class="text-gray-600 mb-3">Search each CPT code from your itemized bill on <a href="/procedures/" class="text-brand-600 underline hover:text-brand-700">MedicalCosts.info</a> to find out what Medicare pays for each service.</p>
+        <div class="bg-brand-50 border border-brand-200 rounded-lg p-4">
+          <p class="text-sm text-brand-800">Common CPT codes on ER bills:</p>
+          <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+            <a href="/procedures/99281/" class="text-brand-600 hover:underline">99281 - ER Visit (Minor)</a>
+            <a href="/procedures/99283/" class="text-brand-600 hover:underline">99283 - ER Visit (Moderate)</a>
+            <a href="/procedures/99285/" class="text-brand-600 hover:underline">99285 - ER Visit (High)</a>
+            <a href="/procedures/70450/" class="text-brand-600 hover:underline">70450 - CT Scan (Head)</a>
+            <a href="/procedures/71045/" class="text-brand-600 hover:underline">71045 - X-Ray (Chest)</a>
+            <a href="/procedures/36415/" class="text-brand-600 hover:underline">36415 - Blood Draw</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">3</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Compare to Medicare Rate</h2>
+        <p class="text-gray-600 mb-3">The <strong>Medicare rate</strong> is the national benchmark price the federal government sets for each procedure. It is the single most important number in your negotiation.</p>
+        <p class="text-gray-600">You can use our <a href="/bill-checker/" class="text-brand-600 underline hover:text-brand-700">Bill Checker tool</a> to instantly compare your bill to Medicare rates.</p>
+      </section>
+
+      <!-- Step 4 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">4</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Know the "Fair Price" Range</h2>
+        <p class="text-gray-600 mb-3">Commercial insurance companies typically negotiate rates between <strong>150% and 250% of the Medicare rate</strong>. This is your "fair price" benchmark.</p>
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-left">
+                <th class="px-4 py-2 font-semibold text-gray-700">Price Level</th>
+                <th class="px-4 py-2 font-semibold text-gray-700">% of Medicare</th>
+                <th class="px-4 py-2 font-semibold text-gray-700">Assessment</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr><td class="px-4 py-2">Below 150%</td><td class="px-4 py-2">Under 1.5x</td><td class="px-4 py-2 text-green-600 font-semibold">Excellent price</td></tr>
+              <tr><td class="px-4 py-2">150% - 200%</td><td class="px-4 py-2">1.5x - 2x</td><td class="px-4 py-2 text-green-600 font-semibold">Good / Fair</td></tr>
+              <tr><td class="px-4 py-2">200% - 250%</td><td class="px-4 py-2">2x - 2.5x</td><td class="px-4 py-2 text-blue-600 font-semibold">Normal range</td></tr>
+              <tr><td class="px-4 py-2">250% - 400%</td><td class="px-4 py-2">2.5x - 4x</td><td class="px-4 py-2 text-amber-600 font-semibold">Above average &mdash; negotiate</td></tr>
+              <tr><td class="px-4 py-2">Above 400%</td><td class="px-4 py-2">4x+</td><td class="px-4 py-2 text-red-600 font-semibold">Very high &mdash; strongly negotiate</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Step 5 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">5</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Call the Billing Department</h2>
+        <p class="text-gray-600 mb-3">Call the hospital or provider's billing department (not the collections number). Be polite, persistent, and come prepared with your data.</p>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-3">
+          <p class="font-semibold text-gray-800">Sample script:</p>
+          <p class="text-gray-600 italic">"Hello, I am calling about my bill for [procedure]. I have been billed [amount]. I have researched the Medicare rate for this procedure, which is [Medicare rate], and commercial insurance companies typically pay between [fair range]. I would like to discuss a reduction to a fair and customary rate."</p>
+          <p class="text-gray-500">Key phrases: "fair and customary rate," "Medicare-based pricing," "financial hardship," "prompt payment discount"</p>
+        </div>
+      </section>
+
+      <!-- Step 6 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">6</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Request a Financial Hardship Discount</h2>
+        <p class="text-gray-600 mb-3">Most hospitals are required to have <strong>financial assistance policies</strong> (especially non-profit hospitals). Common discounts:</p>
+        <ul class="list-disc list-inside text-gray-600 space-y-1 mb-3">
+          <li><strong>Charity care:</strong> Free or reduced care for low-income patients (many hospitals require income below 200-400% of federal poverty level)</li>
+          <li><strong>Prompt pay discount:</strong> 10-30% off for paying within 30 days</li>
+          <li><strong>Uninsured discount:</strong> 20-60% off for self-pay patients</li>
+          <li><strong>General hardship:</strong> 20-40% reduction based on demonstrated inability to pay</li>
+        </ul>
+        <p class="text-sm text-gray-500">Tip: Non-profit hospitals receiving federal tax exemptions are legally required to have financial assistance programs under IRS Section 501(r).</p>
+      </section>
+
+      <!-- Step 7 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">7</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">Negotiate a Payment Plan</h2>
+        <p class="text-gray-600 mb-3">If you cannot pay the (reduced) bill in full, most hospitals offer interest-free payment plans. Key points:</p>
+        <ul class="list-disc list-inside text-gray-600 space-y-1">
+          <li>Most hospitals will agree to 12-24 month payment plans</li>
+          <li>Always get the agreement in writing</li>
+          <li>Confirm the plan is interest-free (most hospital plans are)</li>
+          <li>Set up automatic payments to avoid missing deadlines</li>
+          <li>Ask if the total can be further reduced for committing to a payment schedule</li>
+        </ul>
+      </section>
+
+      <!-- Step 8 -->
+      <section class="relative pl-12 sm:pl-16">
+        <div class="absolute left-0 top-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold text-lg">8</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-3">If Denied, Escalate</h2>
+        <p class="text-gray-600 mb-3">If the billing department will not negotiate, you have several escalation options:</p>
+        <ul class="list-disc list-inside text-gray-600 space-y-1 mb-3">
+          <li>Ask to speak with a supervisor or the patient financial services director</li>
+          <li>File a formal dispute in writing (use our <a href="/negotiate/letter/" class="text-brand-600 underline hover:text-brand-700">letter generator</a>)</li>
+          <li>File a complaint with your <strong>state insurance department</strong> (links below)</li>
+          <li>Contact your state attorney general's consumer protection division</li>
+          <li>Hire a <strong>medical billing advocate</strong> (they typically charge 25-35% of the savings)</li>
+          <li>For bills over $10,000: consult with a healthcare attorney</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- Sample Negotiation Letter -->
+    <div class="mt-16 bg-white border-2 border-brand-200 rounded-2xl p-6 sm:p-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Sample Negotiation Letter</h2>
+      <p class="text-sm text-gray-500 mb-4">Use our <a href="/negotiate/letter/" class="text-brand-600 underline hover:text-brand-700">interactive letter generator</a> to create a personalized version, or use this template:</p>
+      <div class="bg-gray-50 rounded-lg p-5 text-sm font-mono text-gray-700 space-y-3 whitespace-pre-wrap leading-relaxed">
+[Your Name]
+[Your Address]
+[Date]
+
+[Hospital/Provider Name]
+Billing Department
+[Hospital Address]
+
+Re: Account #[Account Number]
+    Patient: [Your Name]
+    Date of Service: [Date]
+
+Dear Billing Department,
+
+I am writing to dispute the charges on the above-referenced account. I was billed $[Billed Amount] for [Procedure Description] (CPT Code: [Code]).
+
+After researching publicly available pricing data, I have found:
+- The Medicare reimbursement rate for this procedure is $[Medicare Rate]
+- Commercial insurance companies typically pay $[Fair Range Low] - $[Fair Range High] (150-250% of Medicare)
+- My bill of $[Billed Amount] represents [X]% of Medicare, which is significantly above the typical commercial rate
+
+I am requesting that my bill be adjusted to a fair and customary rate of $[Target Amount] (200% of the Medicare rate), consistent with what commercial insurance plans typically pay for this service.
+
+If you are unable to adjust the charges, I request:
+1. A detailed explanation of how the charges were determined
+2. Information about your financial assistance/charity care programs
+3. An interest-free payment plan for the adjusted amount
+
+I look forward to resolving this matter promptly. Please respond within 30 days.
+
+Sincerely,
+[Your Name]
+[Phone Number]
+[Email Address]
+      </div>
+      <div class="mt-4">
+        <a href="/negotiate/letter/" class="inline-flex items-center px-5 py-2.5 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors text-sm">
+          Generate a Personalized Letter
+        </a>
+      </div>
+    </div>
+
+    <!-- State Insurance Departments -->
+    <div class="mt-16">
+      <h2 class="text-xl font-bold text-gray-900 mb-4" id="state-insurance-departments">State Insurance Department Links</h2>
+      <p class="text-gray-600 mb-6 text-sm">If your provider or insurer will not resolve a billing dispute, file a complaint with your state insurance department:</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {stateInsuranceDepts.map(s => (
+          <a href={s.url} target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 hover:text-brand-600 transition-colors border border-transparent hover:border-gray-200">
+            <span class="font-mono text-xs text-gray-400 w-6">{s.code}</span>
+            <span>{s.state}</span>
+            <svg class="w-3 h-3 ml-auto text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="mt-16">
+      <h2 class="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+      <div class="space-y-4">
+        <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+            What percentage of medical bills can be negotiated?
+            <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-6 pb-4 text-gray-600 text-sm">Studies show roughly 50-80% of medical bills can be successfully negotiated. Uninsured patients and those with high-deductible plans typically have the most leverage.</div>
+        </details>
+        <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+            How much can I typically save by negotiating?
+            <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-6 pb-4 text-gray-600 text-sm">On average, patients save 30-60% off their original bill through negotiation. Financial hardship programs can reduce bills by 20-100% depending on income.</div>
+        </details>
+        <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+            When should I negotiate my medical bill?
+            <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-6 pb-4 text-gray-600 text-sm">Negotiate before the bill goes to collections -- ideally within 30-60 days of receiving it. The billing department has more flexibility than a collections agency.</div>
+        </details>
+        <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+            What is the Medicare rate and why does it matter?
+            <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-6 pb-4 text-gray-600 text-sm">The Medicare rate is what the federal government pays for each procedure. It serves as a national pricing benchmark. Commercial insurance typically pays 150-250% of Medicare, so anything above 300% is generally above market rate.</div>
+        </details>
+        <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
+            Can I negotiate a bill that insurance already paid partially?
+            <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-6 pb-4 text-gray-600 text-sm">Yes. You can negotiate your remaining balance (co-pay, coinsurance, or deductible portion). Request an itemized bill, check for errors, and negotiate the patient-responsibility amount.</div>
+        </details>
+      </div>
+    </div>
+  </article>
+</Base>
