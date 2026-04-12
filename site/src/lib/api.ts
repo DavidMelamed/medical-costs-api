@@ -98,6 +98,33 @@ export async function getProcedure(code: string): Promise<Procedure | null> {
   return fetchApi<Procedure>(`/procedures/${code}`);
 }
 
+export async function getProcedureBySlug(slug: string): Promise<Procedure | null> {
+  return fetchApi<Procedure>(`/procedures/by-slug/${slug}`);
+}
+
+export async function getRelatedProcedures(code: string): Promise<Array<{
+  code: string;
+  description: string;
+  category: string;
+  bodySystem: string;
+  nationalFacilityRate: number | null;
+  slug: string | null;
+  relevance: number;
+}>> {
+  const data = await fetchApi<any[]>(`/related/${code}`);
+  return data || [];
+}
+
+export async function getMetricsFacts(): Promise<Array<{
+  key: string;
+  value: number;
+  label: string;
+  detail: string;
+}>> {
+  const data = await fetchApi<any[]>('/metrics/facts');
+  return data || [];
+}
+
 export async function getCategories(): Promise<{ categories: Array<[string, number]>; bodySystems: Array<[string, number]> }> {
   const data = await fetchApi<any>('/categories');
   return data || { categories: [], bodySystems: [] };
@@ -123,6 +150,28 @@ export async function getStatistics() {
 
 export async function getCrashEstimate(severity: string, state = 'CO') {
   return fetchApi<CrashEstimate>(`/crash-estimate?severity=${severity}&state=${state}`);
+}
+
+// Settlement estimate
+export interface SettlementEstimate {
+  injury: { name: string; slug: string; bodyRegion: string; crashRelevance: string; description: string };
+  severity: string;
+  state: string;
+  medicalCosts: { low: number; high: number; byPhase: Record<string, number>; source: string; note: string };
+  lostWages: { recoveryWeeks: number; weeklyWage: number; workImpactFactor: string; low: number; high: number };
+  settlement: {
+    economicDamagesLow: number; economicDamagesHigh: number;
+    multiplierLow: number; multiplierHigh: number;
+    painAndSufferingLow: number; painAndSufferingHigh: number;
+    totalEstimateLow: number; totalEstimateHigh: number;
+  };
+  methodology: { formula: string; multiplierMethod: string; medicalCostBasis: string; lostWageBasis: string; sources: string[] };
+  attorneyImpact: { withoutAttorney: number; withAttorney: number; multiplier: number; source: string };
+  disclaimer: string;
+}
+
+export async function getSettlementEstimate(injury: string, severity: string, state = 'CO'): Promise<SettlementEstimate | null> {
+  return fetchApi<SettlementEstimate>(`/settlement-estimate?injury=${encodeURIComponent(injury)}&severity=${encodeURIComponent(severity)}&state=${encodeURIComponent(state)}`);
 }
 
 // Formatting utilities
@@ -228,6 +277,25 @@ export async function getDrgList(params: {
 
 export async function getDrg(code: string): Promise<DrgDetail | null> {
   return fetchApi<DrgDetail>(`/drg/${code}`);
+}
+
+// Knowledge graph
+export interface GraphRelationship {
+  type: string;
+  id: string;
+  weight: number;
+  direction: 'incoming' | 'outgoing';
+}
+
+export interface GraphResult {
+  entity: { type: string; id: string };
+  relationships: Record<string, GraphRelationship[]>;
+  totalOutgoing: number;
+  totalIncoming: number;
+}
+
+export async function getGraphRelationships(entityType: string, entityId: string): Promise<GraphResult | null> {
+  return fetchApi<GraphResult>(`/graph/${entityType}/${entityId}`);
 }
 
 export const STATES = [

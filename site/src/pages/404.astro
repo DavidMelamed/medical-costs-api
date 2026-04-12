@@ -1,0 +1,73 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const popularPages = [
+  { name: 'MRI Costs', href: '/procedures/72148/' },
+  { name: 'ER Visit Costs', href: '/procedures/99285/' },
+  { name: 'Knee Replacement', href: '/conditions/knee-injury/' },
+  { name: 'Drug Prices', href: '/drugs/' },
+  { name: 'Hospital Stay Costs', href: '/drg/' },
+  { name: 'Cost by State', href: '/states/' },
+  { name: 'All Procedures', href: '/procedures/' },
+  { name: 'Cost Estimator', href: '/estimator/' },
+];
+---
+
+<Base
+  title="Page Not Found — MedicalCosts.info"
+  description="The page you're looking for doesn't exist. Search for medical procedure costs or browse our popular pages."
+  noindex={true}
+>
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+    <div class="text-8xl font-extrabold text-brand-200 mb-4">404</div>
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Page Not Found</h1>
+    <p class="text-lg text-gray-500 mb-8">
+      Sorry, we couldn't find that page. It may have been moved or the URL might be incorrect.
+    </p>
+
+    <!-- Search Bar -->
+    <form action="/procedures/" method="GET" class="max-w-lg mx-auto mb-12">
+      <div class="flex gap-3">
+        <input
+          type="text"
+          name="search"
+          placeholder="Search for a procedure, drug, or condition..."
+          class="flex-1 px-5 py-3 rounded-xl border-2 border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-brand-200 focus:border-brand-500"
+        />
+        <button
+          type="submit"
+          class="px-6 py-3 bg-brand-600 text-white font-bold rounded-xl hover:bg-brand-700 transition-colors"
+        >
+          Search
+        </button>
+      </div>
+    </form>
+
+    <!-- Were you looking for? -->
+    <div class="text-left bg-gray-50 rounded-2xl p-8 border border-gray-200">
+      <h2 class="text-lg font-bold text-gray-900 mb-4">Were you looking for?</h2>
+      <div class="grid sm:grid-cols-2 gap-3">
+        {popularPages.map(page => (
+          <a
+            href={page.href}
+            class="flex items-center gap-3 px-4 py-3 bg-white rounded-lg border border-gray-200 hover:border-brand-500 hover:shadow-sm transition-all group"
+          >
+            <svg class="w-5 h-5 text-brand-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <span class="font-medium text-gray-700 group-hover:text-brand-700">{page.name}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <div class="mt-10">
+      <a href="/" class="inline-flex items-center gap-2 text-brand-600 font-semibold hover:underline">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to Homepage
+      </a>
+    </div>
+  </section>
+</Base>

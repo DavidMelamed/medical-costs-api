@@ -1,5 +1,6 @@
 ---
 import Base from '@/layouts/Base.astro';
+import RelatedLinks from '@/components/RelatedLinks.astro';
 import { getInjury, formatCurrency, formatCurrencyFull, STATES } from '@/lib/api';
 
 const { slug } = Astro.params;
@@ -31,6 +32,37 @@ const phaseColors: Record<string, string> = {
   SURGICAL: 'border-purple-300 bg-purple-50', REHABILITATION: 'border-blue-300 bg-blue-50',
   CHRONIC: 'border-yellow-300 bg-yellow-50', LIFETIME: 'border-gray-300 bg-gray-50',
 };
+
+const phaseBadgeColors: Record<string, string> = {
+  EMERGENCY: 'bg-red-500', ACUTE: 'bg-orange-500',
+  SURGICAL: 'bg-purple-500', REHABILITATION: 'bg-blue-500',
+  CHRONIC: 'bg-yellow-500', LIFETIME: 'bg-gray-500',
+};
+
+// Determine which phases are present for the timeline
+const allPhases = ['EMERGENCY', 'ACUTE', 'SURGICAL', 'REHABILITATION', 'CHRONIC', 'LIFETIME'];
+const presentPhases = allPhases.filter(ph => breakdown.some((b: any) => b.phase === ph));
+
+// Recovery time estimates by condition type
+const recoveryEstimates: Record<string, string> = {
+  'traumatic-brain-injury': '3 months to 2+ years',
+  'spinal-cord-injury': '6 months to lifetime',
+  'fractures': '6 to 12 weeks',
+  'knee-injury': '6 to 9 months',
+  'whiplash-cervical-strain': '2 to 12 weeks',
+  'burns': '2 weeks to 18+ months',
+  'shoulder-injury': '3 to 6 months',
+  'hip-injury': '3 to 6 months',
+  'rib-fractures': '4 to 6 weeks',
+  'facial-injuries': '4 to 8 weeks',
+  'soft-tissue-injuries': '2 to 8 weeks',
+  'internal-organ-injuries': '4 to 12 weeks',
+  'ankle-foot-injury': '6 to 16 weeks',
+  'wrist-hand-injury': '4 to 12 weeks',
+  'pelvic-injury': '8 to 16 weeks',
+};
+
+const recoveryTime = slug ? recoveryEstimates[slug] || null : null;
 
 const schema = {
   "@context": "https://schema.org",
@@ -109,6 +141,58 @@ const faqSchema = {
           </div>
         )}
 
+        <!-- Treatment Timeline -->
+        {presentPhases.length > 1 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-1">Treatment Timeline</h2>
+            <p class="text-sm text-gray-500 mb-6">Typical phases of care for {c.name}</p>
+            <div class="relative">
+              <div class="absolute left-5 top-5 bottom-5 w-0.5 bg-gray-200"></div>
+              <div class="space-y-6">
+                {presentPhases.map((phase, i) => {
+                  const phaseData = breakdown.find((b: any) => b.phase === phase);
+                  return (
+                    <div class="relative flex items-start gap-4 pl-1">
+                      <div class={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 z-10 ${phaseBadgeColors[phase] || 'bg-gray-500'}`}>
+                        {i + 1}
+                      </div>
+                      <div class="flex-1 pb-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="font-bold text-gray-900">{phaseLabels[phase] || phase}</span>
+                          {phaseData && (
+                            <span class="text-xs px-2 py-0.5 bg-gray-100 rounded-full text-gray-600">
+                              {phaseData.procedures.length} procedure{phaseData.procedures.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        {phaseData && (
+                          <div class="text-sm text-gray-600 mt-1">
+                            Estimated: <span class="font-semibold">{formatCurrencyFull(phaseData.subtotalLow)} — {formatCurrencyFull(phaseData.subtotalHigh)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <!-- Average Recovery Time -->
+        {recoveryTime && (
+          <div class="bg-blue-50 rounded-xl border border-blue-200 p-6 flex items-start gap-4">
+            <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <svg class="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-gray-900">Average Recovery Time</h2>
+              <div class="text-2xl font-bold text-blue-700 mt-1">{recoveryTime}</div>
+              <p class="text-sm text-gray-500 mt-1">Recovery time varies based on severity, age, overall health, and treatment approach. Consult your physician for a personalized estimate.</p>
+            </div>
+          </div>
+        )}
+
         <!-- Treatment breakdown by phase -->
         {breakdown.length > 0 && (
           <div>
@@ -163,6 +247,41 @@ const faqSchema = {
           </div>
         )}
 
+        <!-- Questions to Ask Your Doctor About Costs -->
+        <div class="bg-amber-50 rounded-xl border border-amber-200 p-6">
+          <h2 class="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+            <svg class="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Questions to Ask Your Doctor About Costs
+          </h2>
+          <p class="text-sm text-gray-600 mb-4">Before your appointment, ask these questions to avoid surprise bills</p>
+          <ul class="space-y-3">
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <span class="text-sm text-gray-700">"What is the total estimated cost for my {c.name} treatment, including all follow-up visits?"</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <span class="text-sm text-gray-700">"Are there less expensive treatment alternatives that would be equally effective?"</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <span class="text-sm text-gray-700">"Can any of these procedures be done in an outpatient or office setting instead of a hospital?"</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <span class="text-sm text-gray-700">"Will all the providers involved in my care (anesthesiologist, radiologist, etc.) be in-network?"</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <span class="text-sm text-gray-700">"Do you offer payment plans or financial assistance for patients?"</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <span class="text-sm text-gray-700">"What will my insurance cover, and what is my estimated out-of-pocket responsibility?"</span>
+            </li>
+          </ul>
+        </div>
+
         <!-- FAQ -->
         <div class="bg-white rounded-xl border border-gray-200 p-6">
           <h2 class="text-xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
@@ -195,6 +314,9 @@ const faqSchema = {
             {c.icd10CodeStart && (
               <div><dt class="text-gray-500">ICD-10 Range</dt><dd class="font-mono">{c.icd10CodeStart}{c.icd10CodeEnd ? ` — ${c.icd10CodeEnd}` : ''}</dd></div>
             )}
+            {recoveryTime && (
+              <div><dt class="text-gray-500">Avg Recovery Time</dt><dd class="font-semibold text-blue-700">{recoveryTime}</dd></div>
+            )}
             {c.commonCauses?.length > 0 && (
               <div>
                 <dt class="text-gray-500">Common Causes</dt>
@@ -207,6 +329,8 @@ const faqSchema = {
             )}
           </dl>
         </div>
+
+        <RelatedLinks entityType="condition" entityId={slug} />
 
         <div class="bg-white rounded-xl border border-gray-200 p-6">
           <h3 class="font-bold text-gray-900 mb-3">Compare Costs</h3>

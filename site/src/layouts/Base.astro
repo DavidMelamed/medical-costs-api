@@ -10,8 +10,60 @@ interface Props {
 }
 
 const { title, description, canonical, schema, noindex } = Astro.props;
-const siteUrl = 'https://medicalcosts.info';
+const siteUrl = 'https://medical-costs-site.pages.dev';
 const fullCanonical = canonical ? `${siteUrl}${canonical}` : Astro.url.href;
+
+// Organization schema (sitewide)
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "MedicalCosts.info",
+  "url": siteUrl,
+  "description": "Free, transparent medical cost data powered by CMS Medicare fee schedules, NADAC drug pricing, and hospital discharge data.",
+  "sameAs": [],
+  "knowsAbout": [
+    "Medical procedure costs",
+    "Medicare reimbursement rates",
+    "Healthcare pricing transparency",
+    "Drug pricing",
+    "Hospital costs"
+  ]
+};
+
+// BreadcrumbList schema (sitewide)
+const pathSegments = (canonical || Astro.url.pathname).replace(/^\/|\/$/g, '').split('/').filter(Boolean);
+const breadcrumbItems = [
+  { "@type": "ListItem", "position": 1, "name": "Home", "item": siteUrl + "/" }
+];
+const segmentLabels: Record<string, string> = {
+  procedures: "Procedures",
+  categories: "Categories",
+  conditions: "Conditions",
+  drugs: "Drug Prices",
+  drg: "Hospital Stays",
+  states: "By State",
+  estimator: "Cost Estimator",
+  compare: "Compare Costs",
+  mcp: "MCP Server",
+  about: "About",
+  methodology: "Methodology",
+  costs: "Costs",
+};
+let breadcrumbPath = '';
+for (let i = 0; i < pathSegments.length; i++) {
+  breadcrumbPath += '/' + pathSegments[i];
+  breadcrumbItems.push({
+    "@type": "ListItem",
+    "position": i + 2,
+    "name": segmentLabels[pathSegments[i]] || decodeURIComponent(pathSegments[i]).toUpperCase(),
+    "item": siteUrl + breadcrumbPath + '/'
+  });
+}
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": breadcrumbItems
+};
 ---
 
 <!doctype html>
@@ -33,6 +85,8 @@ const fullCanonical = canonical ? `${siteUrl}${canonical}` : Astro.url.href;
     {schema && (
       <script type="application/ld+json" set:html={JSON.stringify(schema)} />
     )}
+    <script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
+    <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
   </head>
   <body>
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -44,6 +98,7 @@ const fullCanonical = canonical ? `${siteUrl}${canonical}` : Astro.url.href;
             </svg>
             <span class="text-xl font-bold text-gray-900">MedicalCosts<span class="text-brand-600">.info</span></span>
           </a>
+          <!-- Desktop nav -->
           <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
             <a href="/procedures/" class="hover:text-brand-600 transition-colors">Procedures</a>
             <a href="/categories/" class="hover:text-brand-600 transition-colors">Categories</a>
@@ -52,9 +107,39 @@ const fullCanonical = canonical ? `${siteUrl}${canonical}` : Astro.url.href;
             <a href="/drg/" class="hover:text-brand-600 transition-colors">Hospital Stays</a>
             <a href="/states/" class="hover:text-brand-600 transition-colors">By State</a>
             <a href="/estimator/" class="hover:text-brand-600 transition-colors">Estimator</a>
+            <a href="/settlement-calculator/" class="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Settlement Calculator</a>
           </div>
+          <!-- Mobile hamburger button -->
+          <button
+            id="mobile-menu-btn"
+            class="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            aria-label="Open menu"
+            aria-expanded="false"
+          >
+            <svg id="menu-icon-open" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </nav>
+      <!-- Mobile slide-down menu -->
+      <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 bg-white">
+        <div class="px-4 py-3 space-y-1">
+          <a href="/procedures/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Procedures</a>
+          <a href="/categories/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Categories</a>
+          <a href="/conditions/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Conditions</a>
+          <a href="/drugs/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Drug Prices</a>
+          <a href="/drg/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Hospital Stays</a>
+          <a href="/states/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">By State</a>
+          <a href="/estimator/" class="block px-3 py-2.5 rounded-lg text-gray-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors">Estimator</a>
+          <div class="border-t border-gray-100 pt-2 mt-2">
+            <a href="/settlement-calculator/" class="block px-3 py-2.5 rounded-lg text-amber-600 font-semibold hover:bg-amber-50 transition-colors">Settlement Calculator</a>
+          </div>
+        </div>
+      </div>
     </header>
 
     <main>
@@ -79,11 +164,13 @@ const fullCanonical = canonical ? `${siteUrl}${canonical}` : Astro.url.href;
             </ul>
           </div>
           <div>
-            <h4 class="text-white font-semibold mb-3 text-sm">Tools</h4>
+            <h4 class="text-white font-semibold mb-3 text-sm">Tools & Info</h4>
             <ul class="space-y-2 text-sm">
               <li><a href="/estimator/" class="hover:text-white">Cost Estimator</a></li>
               <li><a href="/compare/" class="hover:text-white">Compare Costs</a></li>
               <li><a href="/states/" class="hover:text-white">Costs by State</a></li>
+              <li><a href="/about/" class="hover:text-white">About</a></li>
+              <li><a href="/methodology/" class="hover:text-white">Methodology</a></li>
             </ul>
           </div>
           <div>
@@ -103,5 +190,22 @@ const fullCanonical = canonical ? `${siteUrl}${canonical}` : Astro.url.href;
         </div>
       </div>
     </footer>
+
+    <script>
+      const btn = document.getElementById('mobile-menu-btn');
+      const menu = document.getElementById('mobile-menu');
+      const iconOpen = document.getElementById('menu-icon-open');
+      const iconClose = document.getElementById('menu-icon-close');
+
+      if (btn && menu && iconOpen && iconClose) {
+        btn.addEventListener('click', () => {
+          const isOpen = !menu.classList.contains('hidden');
+          menu.classList.toggle('hidden');
+          iconOpen.classList.toggle('hidden');
+          iconClose.classList.toggle('hidden');
+          btn.setAttribute('aria-expanded', String(!isOpen));
+        });
+      }
+    </script>
   </body>
 </html>

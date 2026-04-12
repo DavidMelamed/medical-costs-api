@@ -1,0 +1,506 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const title = 'Methodology — How Medical Costs Are Calculated | MedicalCosts.info';
+const description = 'Deep explanation of Medicare payment methodology including RVUs, conversion factor, GPCIs, commercial insurance multipliers, OPPS/ASC rates, drug pricing (NADAC vs AWP), and DRG-based hospital costing.';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "How Medical Procedure Costs Are Calculated",
+  "description": description,
+  "url": "https://medical-costs-site.pages.dev/methodology/",
+  "datePublished": "2026-01-15",
+  "dateModified": "2026-04-12",
+  "author": {
+    "@type": "Organization",
+    "name": "MedicalCosts.info",
+    "url": "https://medical-costs-site.pages.dev"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "MedicalCosts.info",
+    "url": "https://medical-costs-site.pages.dev"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://medical-costs-site.pages.dev/methodology/"
+  },
+  "about": [
+    { "@type": "Thing", "name": "Medicare Physician Fee Schedule" },
+    { "@type": "Thing", "name": "Relative Value Units" },
+    { "@type": "Thing", "name": "Medical Cost Estimation" }
+  ]
+};
+---
+
+<Base title={title} description={description} canonical="/methodology/" schema={schema}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Methodology</span>
+    </nav>
+
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">How Medical Costs Are Calculated</h1>
+    <p class="text-xl text-gray-600 mb-8">
+      A comprehensive explanation of the payment systems, data sources, and formulas behind every cost estimate on MedicalCosts.info.
+    </p>
+
+    <div class="prose prose-gray max-w-none">
+
+      <!-- Table of Contents -->
+      <div class="bg-gray-50 rounded-lg p-6 mb-10 not-prose">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Table of Contents</h2>
+        <ol class="list-decimal list-inside space-y-1 text-brand-600">
+          <li><a href="#rvu-methodology" class="hover:underline">Medicare Physician Payment (RVU Methodology)</a></li>
+          <li><a href="#conversion-factor" class="hover:underline">The Conversion Factor</a></li>
+          <li><a href="#gpci" class="hover:underline">Geographic Practice Cost Indices (GPCIs)</a></li>
+          <li><a href="#commercial-rates" class="hover:underline">Commercial Insurance Rate Estimation</a></li>
+          <li><a href="#opps" class="hover:underline">Hospital Outpatient (OPPS) Rates</a></li>
+          <li><a href="#asc" class="hover:underline">Ambulatory Surgery Center (ASC) Rates</a></li>
+          <li><a href="#drug-pricing" class="hover:underline">Drug Pricing (NADAC, AWP, WAC)</a></li>
+          <li><a href="#drg" class="hover:underline">DRG-Based Hospital Stay Costing</a></li>
+          <li><a href="#geographic-variation" class="hover:underline">Geographic Cost Variation</a></li>
+          <li><a href="#limitations" class="hover:underline">Limitations & Caveats</a></li>
+        </ol>
+      </div>
+
+      <!-- 1. RVU Methodology -->
+      <section id="rvu-methodology" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">1. Medicare Physician Payment (RVU Methodology)</h2>
+
+        <p class="text-gray-700 mb-4">
+          The Medicare Physician Fee Schedule (PFS) is the foundation of physician payment in the United States.
+          Established by the Omnibus Budget Reconciliation Act of 1989 (OBRA '89) and implemented in 1992,
+          the Resource-Based Relative Value Scale (RBRVS) assigns a numeric value to every medical service
+          based on the resources required to provide it.
+        </p>
+
+        <p class="text-gray-700 mb-4">
+          Every CPT (Current Procedural Terminology) and HCPCS (Healthcare Common Procedure Coding System) code
+          in the fee schedule has three components of <strong>Relative Value Units (RVUs)</strong>:
+        </p>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 not-prose">
+          <h3 class="font-bold text-lg text-gray-900 mb-3">The Three RVU Components</h3>
+          <div class="space-y-4">
+            <div>
+              <h4 class="font-semibold text-gray-900">Work RVU (wRVU)</h4>
+              <p class="text-sm text-gray-700">Accounts for the physician's time, technical skill, physical effort, mental effort, and judgment required. Determined by surveys of physician practice time and intensity, reviewed by the AMA's Relative Value Scale Update Committee (RUC).</p>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900">Practice Expense RVU (PE RVU)</h4>
+              <p class="text-sm text-gray-700">Covers clinical staff wages, medical equipment, supplies, and office overhead. Calculated separately for <strong>facility settings</strong> (hospital, ASC) and <strong>non-facility settings</strong> (office/clinic), because the provider's practice expense is lower when a facility bears the overhead costs.</p>
+            </div>
+            <div>
+              <h4 class="font-semibold text-gray-900">Malpractice RVU (MP RVU)</h4>
+              <p class="text-sm text-gray-700">Reflects the cost of professional liability insurance, which varies by specialty and procedure risk. A neurosurgeon's malpractice RVU is higher than a dermatologist's for comparable work.</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-gray-700 mb-4">
+          The total RVU is the sum of all three components. For example, CPT 99213 (established patient office visit,
+          low-moderate complexity) has approximately:
+        </p>
+
+        <div class="bg-gray-50 rounded-lg p-4 mb-4 not-prose font-mono text-sm">
+          <div>Work RVU: 1.30</div>
+          <div>PE RVU (non-facility): 1.28</div>
+          <div>Malpractice RVU: 0.10</div>
+          <div class="border-t border-gray-300 mt-2 pt-2 font-bold">Total RVU: 2.68</div>
+        </div>
+      </section>
+
+      <!-- 2. Conversion Factor -->
+      <section id="conversion-factor" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">2. The Conversion Factor</h2>
+
+        <p class="text-gray-700 mb-4">
+          The <strong>Conversion Factor (CF)</strong> translates RVUs into dollar amounts. It is set annually
+          by CMS through the Federal Register rulemaking process.
+        </p>
+
+        <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-6 not-prose">
+          <h3 class="font-bold text-lg text-gray-900 mb-3">The Medicare Payment Formula</h3>
+          <div class="text-center py-4">
+            <div class="text-xl font-mono font-bold text-gray-900">
+              Payment = [(Work RVU x Work GPCI) + (PE RVU x PE GPCI) + (MP RVU x MP GPCI)] x CF
+            </div>
+          </div>
+          <p class="text-sm text-gray-600 mt-3">
+            For CY 2026, the national conversion factor is <strong>$33.40</strong>.
+          </p>
+        </div>
+
+        <p class="text-gray-700 mb-4">
+          The conversion factor has changed over time. Congress has repeatedly intervened to prevent scheduled
+          cuts under the sustainable growth rate (SGR) formula (repealed in 2015 by MACRA) and its successor
+          update mechanisms. The CY 2026 CF of $33.40 reflects the latest Congressional action.
+        </p>
+
+        <p class="text-gray-700">
+          For a simple national rate (without geographic adjustment), the formula simplifies to:
+        </p>
+
+        <div class="bg-gray-50 rounded-lg p-4 mt-3 not-prose font-mono text-sm">
+          <div>Example: CPT 99213</div>
+          <div>Total RVU: 2.68</div>
+          <div>National Payment: 2.68 x $33.40 = <strong>$89.51</strong></div>
+        </div>
+      </section>
+
+      <!-- 3. GPCIs -->
+      <section id="gpci" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">3. Geographic Practice Cost Indices (GPCIs)</h2>
+
+        <p class="text-gray-700 mb-4">
+          Healthcare costs vary dramatically by location due to differences in wages, rent, and malpractice
+          premiums. CMS accounts for this through <strong>Geographic Practice Cost Indices (GPCIs)</strong>,
+          which adjust each RVU component separately for 109 Medicare payment localities.
+        </p>
+
+        <p class="text-gray-700 mb-4">
+          Each locality has three GPCI values:
+        </p>
+
+        <ul class="list-disc list-inside text-gray-700 space-y-2 mb-4">
+          <li><strong>Work GPCI:</strong> Reflects local physician compensation (range: ~0.98 to 1.10). A floor of 1.0 applies in many localities, meaning CMS pays at least the national rate for work.</li>
+          <li><strong>Practice Expense GPCI:</strong> Reflects local office rent, staff wages, equipment costs (range: ~0.80 to 1.60). This has the widest variation -- Manhattan's PE GPCI can be 50%+ above rural areas.</li>
+          <li><strong>Malpractice GPCI:</strong> Reflects local malpractice insurance premiums (range: ~0.40 to 1.90). States with tort reform tend to have lower MP GPCIs.</li>
+        </ul>
+
+        <div class="bg-blue-50 rounded-lg p-6 mb-4 not-prose">
+          <h3 class="font-bold text-gray-900 mb-3">Example: CPT 99213 in Manhattan vs. Rural Mississippi</h3>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <h4 class="font-semibold mb-2">Manhattan (Locality 01)</h4>
+              <div class="font-mono">
+                <div>(1.30 x 1.094) + (1.28 x 1.577) + (0.10 x 1.307)</div>
+                <div>= 1.422 + 2.019 + 0.131 = 3.572</div>
+                <div>3.572 x $33.40 = <strong>$119.30</strong></div>
+              </div>
+            </div>
+            <div>
+              <h4 class="font-semibold mb-2">Rural Mississippi (Locality 99)</h4>
+              <div class="font-mono">
+                <div>(1.30 x 1.000) + (1.28 x 0.823) + (0.10 x 0.405)</div>
+                <div>= 1.300 + 1.053 + 0.041 = 2.394</div>
+                <div>2.394 x $33.40 = <strong>$79.96</strong></div>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-3">Same procedure, 49% cost difference due to geography alone.</p>
+        </div>
+      </section>
+
+      <!-- 4. Commercial Rates -->
+      <section id="commercial-rates" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">4. Commercial Insurance Rate Estimation</h2>
+
+        <p class="text-gray-700 mb-4">
+          Medicare rates serve as a benchmark, but most patients under 65 have commercial insurance, which
+          pays providers at significantly higher rates. Estimating commercial rates from Medicare rates requires
+          understanding the typical multiplier.
+        </p>
+
+        <p class="text-gray-700 mb-4">
+          Key research on the Medicare-to-commercial ratio:
+        </p>
+
+        <ul class="list-disc list-inside text-gray-700 space-y-3 mb-4">
+          <li>
+            <strong>RAND Hospital Price Transparency Study (2024):</strong> Found that commercial hospital
+            prices average <strong>254% of Medicare</strong> nationally, with wide variation (from ~150% at
+            competitive hospitals to 400%+ at monopoly hospitals).
+            <a href="https://www.rand.org/pubs/research_reports/RRA1144-1.html" class="text-brand-600 hover:underline text-sm" target="_blank" rel="noopener">[Source]</a>
+          </li>
+          <li>
+            <strong>KFF Employer Health Benefits Survey (2024):</strong> Documents that employer-sponsored
+            plans face steadily increasing costs, with hospital services being the primary cost driver.
+            <a href="https://www.kff.org/health-costs/report/employer-health-benefits-survey/" class="text-brand-600 hover:underline text-sm" target="_blank" rel="noopener">[Source]</a>
+          </li>
+          <li>
+            <strong>MedPAC Reports to Congress:</strong> The Medicare Payment Advisory Commission regularly
+            publishes analyses showing private payer rates averaging <strong>150-200% of Medicare</strong> for
+            physician services and higher for hospital services.
+            <a href="https://www.medpac.gov/" class="text-brand-600 hover:underline text-sm" target="_blank" rel="noopener">[Source]</a>
+          </li>
+          <li>
+            <strong>Health Affairs (Lopez et al., 2020):</strong> Analysis of commercial claims data showing
+            physician commercial rates averaging <strong>143% of Medicare</strong>, while hospital outpatient
+            commercial rates averaged <strong>264% of Medicare</strong>.
+          </li>
+        </ul>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-4 not-prose">
+          <h3 class="font-bold text-gray-900 mb-3">Our Commercial Rate Estimation</h3>
+          <p class="text-sm text-gray-700 mb-3">
+            On MedicalCosts.info, we estimate commercial insurance rates as a range:
+          </p>
+          <ul class="list-disc list-inside text-sm text-gray-700 space-y-1">
+            <li><strong>Low estimate:</strong> 150% of Medicare rate (competitive markets, primary care)</li>
+            <li><strong>High estimate:</strong> 250% of Medicare rate (concentrated markets, hospital-based)</li>
+          </ul>
+          <p class="text-xs text-gray-500 mt-3">
+            These are rough estimates. Actual commercial rates depend on the specific insurer-provider contract
+            and are not publicly available in most states.
+          </p>
+        </div>
+      </section>
+
+      <!-- 5. OPPS -->
+      <section id="opps" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">5. Hospital Outpatient (OPPS) Rates</h2>
+
+        <p class="text-gray-700 mb-4">
+          When a procedure is performed in a hospital outpatient department (rather than a physician's office),
+          two separate payments are generated:
+        </p>
+
+        <ol class="list-decimal list-inside text-gray-700 space-y-2 mb-4">
+          <li>The <strong>physician/professional fee</strong> (paid under the PFS using facility PE RVUs)</li>
+          <li>The <strong>facility fee</strong> (paid to the hospital under OPPS)</li>
+        </ol>
+
+        <p class="text-gray-700 mb-4">
+          The Outpatient Prospective Payment System (OPPS) groups procedures into
+          <strong>Ambulatory Payment Classifications (APCs)</strong>. Each APC has a relative weight, and
+          the payment is calculated as:
+        </p>
+
+        <div class="bg-gray-50 rounded-lg p-4 mb-4 not-prose font-mono text-sm">
+          OPPS Payment = APC Relative Weight x OPPS Conversion Factor x Wage Index Adjustment
+        </div>
+
+        <p class="text-gray-700 mb-4">
+          For patients, this means hospital outpatient procedures typically cost more than the same procedure
+          in a physician's office, because the hospital charges a facility fee on top of the professional fee.
+          This "site-of-service differential" is a major driver of healthcare cost growth as hospitals acquire
+          physician practices.
+        </p>
+
+        <p class="text-gray-700">
+          On MedicalCosts.info, we display the OPPS facility fee (labeled "Hospital Outpatient" cost) separately
+          from the physician fee. The total patient cost for a hospital-based procedure is the sum of both.
+        </p>
+      </section>
+
+      <!-- 6. ASC -->
+      <section id="asc" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">6. Ambulatory Surgery Center (ASC) Rates</h2>
+
+        <p class="text-gray-700 mb-4">
+          Ambulatory Surgery Centers (ASCs) are freestanding facilities that provide same-day surgical care.
+          CMS pays ASCs under a separate payment system that uses a modified version of the OPPS APC groupings
+          but with lower payment rates.
+        </p>
+
+        <p class="text-gray-700 mb-4">
+          Key differences from hospital outpatient rates:
+        </p>
+
+        <ul class="list-disc list-inside text-gray-700 space-y-2 mb-4">
+          <li>ASC rates are typically <strong>30-50% lower</strong> than OPPS rates for the same procedure</li>
+          <li>ASCs cannot perform procedures requiring overnight stays</li>
+          <li>ASCs have lower overhead costs and more focused surgical capabilities</li>
+          <li>Patient copays under Medicare are generally lower at ASCs</li>
+        </ul>
+
+        <p class="text-gray-700">
+          We display ASC rates alongside hospital outpatient rates so patients and referring physicians can
+          compare costs between settings. Many procedures -- cataract surgery, colonoscopy, joint arthroscopy,
+          hernia repair -- can be safely performed in either setting.
+        </p>
+      </section>
+
+      <!-- 7. Drug Pricing -->
+      <section id="drug-pricing" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">7. Drug Pricing (NADAC, AWP, WAC)</h2>
+
+        <p class="text-gray-700 mb-4">
+          Drug pricing in the US involves multiple reference prices, each measuring something different:
+        </p>
+
+        <div class="space-y-4 mb-6 not-prose">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-5">
+            <h3 class="font-bold text-gray-900 mb-2">NADAC (National Average Drug Acquisition Cost)</h3>
+            <p class="text-sm text-gray-700">
+              <strong>What we use.</strong> NADAC reflects the actual price pharmacies pay to acquire drugs,
+              determined through a weekly survey of retail pharmacies conducted by Myers & Stauffer for CMS.
+              NADAC is considered the most accurate publicly available measure of actual drug costs.
+              Published by Medicaid.gov and updated regularly.
+            </p>
+          </div>
+
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-5">
+            <h3 class="font-bold text-gray-900 mb-2">AWP (Average Wholesale Price)</h3>
+            <p class="text-sm text-gray-700">
+              Often called "Ain't What's Paid" in the industry. AWP is a list price set by manufacturers
+              that bears little relationship to actual transaction prices. Historically used as a benchmark
+              for PBM reimbursement (e.g., "AWP minus 15%"), but increasingly replaced by NADAC-based
+              pricing. AWP is typically <strong>20-25% higher</strong> than actual acquisition cost.
+            </p>
+          </div>
+
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-5">
+            <h3 class="font-bold text-gray-900 mb-2">WAC (Wholesale Acquisition Cost)</h3>
+            <p class="text-sm text-gray-700">
+              The manufacturer's list price to wholesalers, before any rebates, discounts, or chargebacks.
+              WAC is roughly equivalent to the drug's "sticker price." Actual net prices (after rebates)
+              can be 30-50% lower for brand-name drugs, but rebate amounts are confidential.
+            </p>
+          </div>
+
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-5">
+            <h3 class="font-bold text-gray-900 mb-2">ASP (Average Sales Price)</h3>
+            <p class="text-sm text-gray-700">
+              Used by Medicare Part B for physician-administered drugs (infusions, injections). ASP is the
+              weighted average of all sales to all purchasers, net of rebates and discounts. Medicare pays
+              ASP + 6% for Part B drugs. ASP is closer to actual transaction prices than AWP or WAC.
+            </p>
+          </div>
+        </div>
+
+        <p class="text-gray-700">
+          On MedicalCosts.info, drug prices reflect NADAC per-unit costs. Retail pharmacy prices include a
+          dispensing fee above NADAC. Patients' out-of-pocket costs depend on their insurance formulary tier,
+          deductible status, and whether they use a coupon or patient assistance program.
+        </p>
+      </section>
+
+      <!-- 8. DRG Costing -->
+      <section id="drg" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">8. DRG-Based Hospital Stay Costing</h2>
+
+        <p class="text-gray-700 mb-4">
+          Inpatient hospital stays are paid under the <strong>Inpatient Prospective Payment System (IPPS)</strong>
+          using <strong>Medicare Severity Diagnosis Related Groups (MS-DRGs)</strong>. Each admission is classified
+          into one of approximately 770 MS-DRGs based on diagnoses, procedures, complications, and comorbidities.
+        </p>
+
+        <div class="bg-blue-50 rounded-lg p-6 mb-6 not-prose">
+          <h3 class="font-bold text-gray-900 mb-3">IPPS Payment Formula</h3>
+          <div class="font-mono text-sm mb-3">
+            IPPS Payment = DRG Relative Weight x Hospital Base Rate x Wage Index Adjustment
+          </div>
+          <p class="text-sm text-gray-700">
+            The hospital base rate (also called the standardized amount) for FY 2026 is approximately
+            <strong>$6,500-$7,000</strong> for operating costs, with a separate capital payment.
+            Each DRG's relative weight reflects the expected resource intensity relative to the average case.
+          </p>
+        </div>
+
+        <p class="text-gray-700 mb-4">
+          DRGs with higher weights indicate more resource-intensive stays. For example:
+        </p>
+
+        <ul class="list-disc list-inside text-gray-700 space-y-1 mb-4">
+          <li>DRG 470 (Major Hip/Knee Replacement, no MCC): Weight ~1.8</li>
+          <li>DRG 871 (Sepsis, no MV, 96+ hrs, with MCC): Weight ~2.2</li>
+          <li>DRG 207 (Respiratory System with Ventilator 96+ hrs): Weight ~5.9</li>
+          <li>DRG 001 (Heart Transplant or Implant of Heart Assist, with MCC): Weight ~27.0</li>
+        </ul>
+
+        <p class="text-gray-700 mb-4">
+          On MedicalCosts.info, we supplement CMS DRG weights with actual discharge data from:
+        </p>
+
+        <ul class="list-disc list-inside text-gray-700 space-y-1">
+          <li><strong>CMS Medicare Inpatient Provider & Service Data:</strong> Average charges, payments, and costs by DRG across 3,000+ hospitals</li>
+          <li><strong>NY SPARCS Hospital Discharge Data:</strong> 400,000+ discharge records with both total charges and total costs, broken out by severity (Minor, Moderate, Major, Extreme)</li>
+        </ul>
+      </section>
+
+      <!-- 9. Geographic Variation -->
+      <section id="geographic-variation" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">9. Geographic Cost Variation</h2>
+
+        <p class="text-gray-700 mb-4">
+          Geographic cost variation in healthcare is driven by multiple factors:
+        </p>
+
+        <div class="space-y-4 not-prose mb-6">
+          <div class="border-l-4 border-brand-500 pl-4">
+            <h3 class="font-semibold text-gray-900">Input Costs</h3>
+            <p class="text-sm text-gray-700">Labor (nurses, techs), real estate, malpractice insurance, and supplies all vary by region. CMS GPCIs capture these differences for Medicare payment.</p>
+          </div>
+          <div class="border-l-4 border-green-500 pl-4">
+            <h3 class="font-semibold text-gray-900">Market Concentration</h3>
+            <p class="text-sm text-gray-700">Areas with fewer hospitals or physician groups tend to have higher commercial prices due to weaker competition. Hospital mergers have reduced competition in many markets.</p>
+          </div>
+          <div class="border-l-4 border-purple-500 pl-4">
+            <h3 class="font-semibold text-gray-900">Practice Patterns</h3>
+            <p class="text-sm text-gray-700">Some regions have higher utilization rates (more tests, procedures, imaging) independent of patient health status. The Dartmouth Atlas Project has documented these variations extensively.</p>
+          </div>
+          <div class="border-l-4 border-amber-500 pl-4">
+            <h3 class="font-semibold text-gray-900">Regulatory Environment</h3>
+            <p class="text-sm text-gray-700">State laws on certificate of need, scope of practice, tort reform, and insurance regulation all affect costs. States with strong tort reform tend to have lower malpractice costs.</p>
+          </div>
+        </div>
+
+        <p class="text-gray-700">
+          On MedicalCosts.info, our <a href="/states/" class="text-brand-600 hover:underline">state pages</a>
+          show GPCI-adjusted rates for each Medicare locality within the state. The
+          <a href="/compare/" class="text-brand-600 hover:underline">comparison tool</a> lets you see
+          side-by-side costs for any procedure across multiple states.
+        </p>
+      </section>
+
+      <!-- 10. Limitations -->
+      <section id="limitations" class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">10. Limitations & Caveats</h2>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-6 not-prose">
+          <ul class="space-y-3 text-sm text-gray-700">
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">1.</span>
+              <span><strong>Medicare rates are not what most patients pay.</strong> Medicare rates are a floor, not a ceiling. Commercial insurance rates, uninsured/cash prices, and out-of-pocket costs can differ substantially.</span>
+            </li>
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">2.</span>
+              <span><strong>Single-code pricing does not capture episode costs.</strong> A knee replacement involves surgeon fees, anesthesia, implant costs, facility fees, physical therapy, imaging, and follow-up visits. Individual CPT codes capture only one component.</span>
+            </li>
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">3.</span>
+              <span><strong>Commercial rate estimates are approximations.</strong> The 150-250% multiplier is based on published research but actual negotiated rates vary by insurer, provider, and market.</span>
+            </li>
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">4.</span>
+              <span><strong>Drug prices change frequently.</strong> NADAC is updated weekly. The prices shown may not reflect the most current acquisition costs, particularly for drugs with volatile pricing.</span>
+            </li>
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">5.</span>
+              <span><strong>DRG costs are averages.</strong> Individual hospital stays vary based on complications, length of stay, and patient characteristics. The average cost for a DRG is not a prediction for any individual case.</span>
+            </li>
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">6.</span>
+              <span><strong>Geographic data has resolution limits.</strong> GPCIs are at the Medicare locality level (109 areas), not county or ZIP code level. Costs within a locality can still vary by provider.</span>
+            </li>
+            <li class="flex gap-3">
+              <span class="font-bold text-amber-600 shrink-0">7.</span>
+              <span><strong>This is not medical advice.</strong> Cost information should inform, not replace, conversations with your healthcare provider and insurance company about your specific situation.</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- References -->
+      <section class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">References & Further Reading</h2>
+        <ul class="list-disc list-inside text-gray-700 space-y-2">
+          <li>CMS. <a href="https://www.cms.gov/medicare/payment/fee-schedules/physician" class="text-brand-600 hover:underline" target="_blank" rel="noopener">Medicare Physician Fee Schedule</a>. CY 2026 Final Rule.</li>
+          <li>CMS. <a href="https://www.cms.gov/medicare/payment/prospective-payment-systems/hospital-outpatient" class="text-brand-600 hover:underline" target="_blank" rel="noopener">Hospital Outpatient PPS</a>. CY 2026 Final Rule.</li>
+          <li>RAND Corporation. <a href="https://www.rand.org/health-care/projects/hospital-pricing.html" class="text-brand-600 hover:underline" target="_blank" rel="noopener">Hospital Price Transparency Study</a>. 2024.</li>
+          <li>MedPAC. <a href="https://www.medpac.gov/document/march-2024-report-to-the-congress/" class="text-brand-600 hover:underline" target="_blank" rel="noopener">Report to the Congress: Medicare Payment Policy</a>. March 2024.</li>
+          <li>KFF. <a href="https://www.kff.org/health-costs/report/employer-health-benefits-survey/" class="text-brand-600 hover:underline" target="_blank" rel="noopener">Employer Health Benefits Survey</a>. 2024.</li>
+          <li>Medicaid.gov. <a href="https://data.medicaid.gov/nadac" class="text-brand-600 hover:underline" target="_blank" rel="noopener">NADAC (National Average Drug Acquisition Cost)</a>.</li>
+          <li>Dartmouth Atlas Project. <a href="https://www.dartmouthatlas.org/" class="text-brand-600 hover:underline" target="_blank" rel="noopener">Geographic Variation in Healthcare</a>.</li>
+          <li>Lopez, E. et al. "How Much More Than Medicare Do Private Insurers Pay?" <em>Health Affairs</em>, 2020.</li>
+        </ul>
+      </section>
+
+    </div>
+  </div>
+</Base>

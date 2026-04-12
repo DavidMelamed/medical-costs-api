@@ -1,0 +1,335 @@
+---
+import Base from '@/layouts/Base.astro';
+
+const title = 'About MedicalCosts.info — Our Data & Methodology';
+const description = 'Learn about MedicalCosts.info, our 17 government data sources, how we calculate medical costs using RVUs, GPCI adjustments, and commercial multipliers, and our commitment to transparency.';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "AboutPage",
+  "name": title,
+  "description": description,
+  "url": "https://medical-costs-site.pages.dev/about/",
+  "mainEntity": {
+    "@type": "Organization",
+    "name": "MedicalCosts.info",
+    "url": "https://medical-costs-site.pages.dev",
+    "description": "Free, transparent medical cost data powered by CMS Medicare fee schedules, NADAC drug pricing, and hospital discharge data."
+  }
+};
+
+const dataSources = [
+  {
+    name: 'CMS Physician Fee Schedule (PFS) CY 2026',
+    description: 'The primary source for physician/professional service rates. Contains relative value units (RVUs) and national payment amounts for 7,700+ CPT/HCPCS codes.',
+    url: 'https://www.cms.gov/medicare/payment/fee-schedules/physician',
+    records: '7,741',
+  },
+  {
+    name: 'CMS Clinical Lab Fee Schedule (CLFS) CY 2026',
+    description: 'Payment rates for clinical laboratory tests billed under the Clinical Laboratory Improvement Amendments (CLIA).',
+    url: 'https://www.cms.gov/medicare/payment/fee-schedules/clinical-laboratory',
+    records: '2,005',
+  },
+  {
+    name: 'CMS Outpatient Prospective Payment System (OPPS) CY 2026',
+    description: 'Hospital outpatient department payment rates organized by Ambulatory Payment Classification (APC) groups.',
+    url: 'https://www.cms.gov/medicare/payment/prospective-payment-systems/hospital-outpatient',
+    records: '7,186',
+  },
+  {
+    name: 'CMS Ambulatory Surgery Center (ASC) Payment System CY 2026',
+    description: 'Payment rates for procedures performed in freestanding ambulatory surgery centers, generally lower than hospital outpatient rates.',
+    url: 'https://www.cms.gov/medicare/payment/prospective-payment-systems/ambulatory-surgical-center-asc',
+    records: '4,332',
+  },
+  {
+    name: 'CMS DMEPOS Fee Schedule CY 2026',
+    description: 'Payment rates for durable medical equipment, prosthetics, orthotics, and supplies such as wheelchairs, crutches, and braces.',
+    url: 'https://www.cms.gov/medicare/payment/fee-schedules/dmepos',
+    records: '1,717',
+  },
+  {
+    name: 'CMS Ambulance Fee Schedule CY 2026',
+    description: 'Base rates and mileage rates for ground and air ambulance services.',
+    url: 'https://www.cms.gov/medicare/payment/fee-schedules/ambulance',
+    records: '10',
+  },
+  {
+    name: 'CMS Geographic Practice Cost Indices (GPCIs)',
+    description: 'Cost-of-practice adjustments for 109 Medicare localities across all 50 states plus DC. Adjusts work, practice expense, and malpractice RVU components by geography.',
+    url: 'https://www.cms.gov/medicare/payment/fee-schedules/physician/locality',
+    records: '2,540',
+  },
+  {
+    name: 'CMS MS-DRG Classification System',
+    description: 'Medicare Severity Diagnosis Related Groups used for inpatient hospital payment. Includes relative weights and geometric/arithmetic mean length of stay.',
+    url: 'https://www.cms.gov/medicare/payment/prospective-payment-systems/acute-inpatient-pps/ms-drg-classifications-and-software',
+    records: '2,534',
+  },
+  {
+    name: 'CMS Medicare Inpatient Provider & Service Data',
+    description: 'Hospital-level data on DRG discharges, average charges, total payments, and Medicare payments across 3,000+ hospitals.',
+    url: 'https://data.cms.gov/provider-summary-by-type-of-service/medicare-inpatient-hospitals',
+    records: 'Aggregated',
+  },
+  {
+    name: 'NADAC (National Average Drug Acquisition Cost)',
+    description: 'The actual acquisition cost pharmacies pay for drugs, surveyed weekly by CMS. More accurate than AWP for estimating real drug costs.',
+    url: 'https://data.medicaid.gov/nadac',
+    records: '760',
+  },
+  {
+    name: 'NY SPARCS Hospital Discharge Data',
+    description: 'New York State hospital inpatient discharge records with total charges AND total costs by DRG and severity level. One of the few public datasets with actual cost data.',
+    url: 'https://health.data.ny.gov/Health/Hospital-Inpatient-Discharges-SPARCS-De-Identified/82xm-y6g8',
+    records: '402,074',
+  },
+  {
+    name: 'CDC WISQARS Cost of Injury Data',
+    description: 'Centers for Disease Control injury cost estimates including medical costs and work loss costs by injury mechanism, intent, and severity.',
+    url: 'https://www.cdc.gov/injury/wisqars/cost/index.html',
+    records: 'Aggregated',
+  },
+  {
+    name: 'NHTSA Economic Impact of Motor Vehicle Crashes',
+    description: 'National Highway Traffic Safety Administration data on the economic and comprehensive costs of motor vehicle crashes by severity (KABCO scale).',
+    url: 'https://www.nhtsa.gov/crash-data-systems/crash-cost-studies',
+    records: 'Aggregated',
+  },
+  {
+    name: 'NSCISC Spinal Cord Injury Cost Data',
+    description: 'National Spinal Cord Injury Statistical Center data on first-year and lifetime costs by injury level and severity (paraplegia, tetraplegia).',
+    url: 'https://www.nscisc.uab.edu/',
+    records: 'Aggregated',
+  },
+  {
+    name: 'CDC TBI Cost Studies',
+    description: 'Traumatic brain injury cost estimates by severity from CDC surveillance data, including acute care and long-term rehabilitation costs.',
+    url: 'https://www.cdc.gov/traumaticbraininjury/data/index.html',
+    records: 'Aggregated',
+  },
+  {
+    name: 'ABA Burn Cost Data',
+    description: 'American Burn Association data on treatment costs by total body surface area (TBSA) burned and burn severity.',
+    url: 'https://ameriburn.org/research/',
+    records: 'Aggregated',
+  },
+  {
+    name: 'ICD-10-CM Injury Code Mappings',
+    description: 'International Classification of Diseases codes (S00-T88, V00-Y99) used to map injuries to treatment procedures and cost categories.',
+    url: 'https://www.cms.gov/medicare/coding-billing/icd-10-codes',
+    records: '152 mappings',
+  },
+];
+---
+
+<Base title={title} description={description} canonical="/about/" schema={schema}>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">About</span>
+    </nav>
+
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">About MedicalCosts.info</h1>
+    <p class="text-xl text-gray-600 mb-8">
+      Free, transparent medical cost data for patients, researchers, journalists, and developers.
+    </p>
+
+    <!-- Mission -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Our Mission</h2>
+      <p class="text-gray-700 mb-4">
+        Medical costs in the United States are notoriously opaque. Even after the Hospital Price Transparency Rule took effect,
+        most patients have no practical way to understand what a procedure will cost before receiving care.
+      </p>
+      <p class="text-gray-700 mb-4">
+        MedicalCosts.info aggregates 17 public government data sources to provide free, searchable cost estimates for
+        <strong>21,000+ medical procedures</strong>, <strong>10,000+ prescription drugs</strong>, and
+        <strong>2,500+ hospital stay categories (DRGs)</strong> across all 50 states and DC.
+      </p>
+      <p class="text-gray-700">
+        All data is derived from publicly available CMS (Centers for Medicare & Medicaid Services) fee schedules,
+        CDC injury cost studies, and hospital discharge data. We do not collect user data or require registration.
+      </p>
+    </section>
+
+    <!-- How Costs Are Calculated -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">How We Calculate Costs</h2>
+
+      <div class="bg-blue-50 rounded-lg p-6 mb-6">
+        <h3 class="font-bold text-lg text-gray-900 mb-3">Medicare Physician Rates (RVU-based)</h3>
+        <p class="text-gray-700 mb-3">
+          Medicare pays physicians based on <strong>Relative Value Units (RVUs)</strong>, which measure the resources
+          required for a service. Each procedure has three RVU components:
+        </p>
+        <ul class="list-disc list-inside text-gray-700 space-y-1 mb-3">
+          <li><strong>Work RVU</strong> -- physician time, skill, and intensity</li>
+          <li><strong>Practice Expense RVU</strong> -- clinical staff, equipment, supplies</li>
+          <li><strong>Malpractice RVU</strong> -- professional liability insurance</li>
+        </ul>
+        <p class="text-gray-700">
+          These are multiplied by the <strong>CMS Conversion Factor ($33.40 for CY 2026)</strong> to produce
+          a dollar payment amount. Geographic adjustments (GPCIs) modify each component by locality.
+        </p>
+      </div>
+
+      <div class="bg-green-50 rounded-lg p-6 mb-6">
+        <h3 class="font-bold text-lg text-gray-900 mb-3">Commercial Insurance Estimates</h3>
+        <p class="text-gray-700">
+          Commercial insurance rates typically range from <strong>150% to 250% of Medicare rates</strong>, depending on
+          provider negotiating power, market competition, and payer mix. We display estimated commercial ranges using
+          these multipliers. These are estimates only -- actual negotiated rates vary by insurer and provider.
+          Research from the RAND Corporation's
+          <a href="https://www.rand.org/health-care/projects/hospital-pricing.html" class="text-brand-600 hover:underline" rel="noopener" target="_blank">Hospital Price Transparency Study</a>
+          and KFF analyses consistently find commercial rates averaging 200% of Medicare.
+        </p>
+      </div>
+
+      <div class="bg-purple-50 rounded-lg p-6 mb-6">
+        <h3 class="font-bold text-lg text-gray-900 mb-3">Hospital & Surgery Center Rates</h3>
+        <p class="text-gray-700">
+          Hospital outpatient rates come from the CMS <strong>Outpatient Prospective Payment System (OPPS)</strong>,
+          which groups procedures into Ambulatory Payment Classifications (APCs). ASC rates come from the separate
+          <strong>ASC Payment System</strong> and are generally 30-50% lower than hospital outpatient rates
+          for the same procedure.
+        </p>
+      </div>
+
+      <div class="bg-amber-50 rounded-lg p-6">
+        <h3 class="font-bold text-lg text-gray-900 mb-3">Drug Pricing</h3>
+        <p class="text-gray-700">
+          Drug prices use <strong>NADAC (National Average Drug Acquisition Cost)</strong> data, which reflects
+          what pharmacies actually pay to acquire drugs. This is more accurate than the commonly cited AWP
+          (Average Wholesale Price), which is often called "Ain't What's Paid" in the industry. We display
+          per-unit NADAC costs as the baseline, with notes on typical retail markups.
+        </p>
+      </div>
+    </section>
+
+    <!-- Geographic Variation -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Geographic Cost Variation</h2>
+      <p class="text-gray-700 mb-4">
+        Medical costs vary significantly by location. CMS divides the country into <strong>109 Medicare payment localities</strong>,
+        each with its own Geographic Practice Cost Index (GPCI) that adjusts the work, practice expense, and malpractice
+        components of each procedure's payment. High-cost areas like Manhattan and San Francisco can have
+        rates 30%+ above the national average, while rural areas may be 10-15% below.
+      </p>
+      <p class="text-gray-700">
+        Our <a href="/states/" class="text-brand-600 hover:underline">state-by-state cost pages</a> and
+        <a href="/compare/" class="text-brand-600 hover:underline">cost comparison tool</a> let you explore
+        these geographic differences.
+      </p>
+    </section>
+
+    <!-- Data Freshness -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Data Freshness</h2>
+      <div class="bg-gray-50 rounded-lg p-6">
+        <p class="text-gray-700 mb-3">
+          Our data reflects <strong>Calendar Year (CY) 2026</strong> CMS fee schedules and payment rates,
+          published in the CMS Final Rules for CY 2026.
+        </p>
+        <ul class="list-disc list-inside text-gray-700 space-y-1">
+          <li>Physician Fee Schedule: CY 2026 Final Rule (Conversion Factor: $33.40)</li>
+          <li>OPPS/ASC rates: CY 2026 Final Rule</li>
+          <li>CLFS rates: CY 2026</li>
+          <li>DMEPOS rates: CY 2026 Q1</li>
+          <li>NADAC drug prices: Latest available survey (updated regularly)</li>
+          <li>NY SPARCS data: 2022 discharge year</li>
+          <li>CDC/NHTSA cost studies: Latest published (adjusted for inflation where applicable)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- All 17 Data Sources -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Our 17 Data Sources</h2>
+      <p class="text-gray-700 mb-6">
+        Every cost estimate on this site is derived from one or more of these public government data sources.
+        We do not use proprietary data or user-submitted prices.
+      </p>
+
+      <div class="space-y-4">
+        {dataSources.map((source, i) => (
+          <div class="border border-gray-200 rounded-lg p-4">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h3 class="font-semibold text-gray-900">
+                  <span class="text-brand-600 font-mono text-sm mr-2">{i + 1}.</span>
+                  {source.url ? (
+                    <a href={source.url} class="hover:text-brand-600 hover:underline" target="_blank" rel="noopener">{source.name}</a>
+                  ) : (
+                    source.name
+                  )}
+                </h3>
+                <p class="text-sm text-gray-600 mt-1">{source.description}</p>
+              </div>
+              <span class="text-xs text-gray-400 whitespace-nowrap font-mono">{source.records}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- API & Developer Access -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">API & Developer Access</h2>
+      <p class="text-gray-700 mb-4">
+        All of our data is accessible through a free REST API and an MCP (Model Context Protocol) server
+        for AI assistants.
+      </p>
+      <div class="grid md:grid-cols-2 gap-4">
+        <a href="https://medical-costs-api.david-568.workers.dev/" class="block bg-white border border-gray-200 rounded-lg p-5 hover:border-brand-500 hover:shadow transition-all">
+          <h3 class="font-bold text-gray-900 mb-2">REST API</h3>
+          <p class="text-sm text-gray-600">Free JSON API for procedure costs, drug prices, DRG data, and geographic comparisons. No authentication required.</p>
+          <code class="text-xs text-brand-600 mt-2 block">medical-costs-api.david-568.workers.dev</code>
+        </a>
+        <a href="/mcp/" class="block bg-white border border-gray-200 rounded-lg p-5 hover:border-brand-500 hover:shadow transition-all">
+          <h3 class="font-bold text-gray-900 mb-2">MCP Server</h3>
+          <p class="text-sm text-gray-600">Model Context Protocol server for Claude, ChatGPT, and other AI assistants. Look up costs in natural language.</p>
+          <code class="text-xs text-brand-600 mt-2 block">npx @anthropic/mcp install</code>
+        </a>
+      </div>
+    </section>
+
+    <!-- Disclaimer -->
+    <section class="mb-12 bg-amber-50 border border-amber-200 rounded-lg p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-3">Important Disclaimer</h2>
+      <p class="text-gray-700 mb-3">
+        <strong>This site is for informational purposes only.</strong> Cost estimates displayed on MedicalCosts.info
+        are based on publicly available Medicare reimbursement rates and government data sources. They are not quotes,
+        guarantees, or predictions of what you will actually pay.
+      </p>
+      <p class="text-gray-700 mb-3">
+        Actual medical costs vary significantly based on:
+      </p>
+      <ul class="list-disc list-inside text-gray-700 space-y-1 mb-3">
+        <li>Your insurance plan and in-network/out-of-network status</li>
+        <li>The specific provider or hospital</li>
+        <li>The complexity of your individual case</li>
+        <li>Geographic location</li>
+        <li>Whether additional procedures or services are needed</li>
+        <li>Your deductible, coinsurance, and out-of-pocket maximum</li>
+      </ul>
+      <p class="text-gray-700">
+        <strong>This is not medical, financial, or legal advice.</strong> Always consult with your healthcare
+        provider and insurance company for cost estimates specific to your situation.
+      </p>
+    </section>
+
+    <!-- Contact -->
+    <section>
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Data Attribution</h2>
+      <p class="text-gray-700">
+        All data on this site is derived from publicly available U.S. government sources, primarily
+        the Centers for Medicare & Medicaid Services (CMS), the Centers for Disease Control and Prevention (CDC),
+        and the National Highway Traffic Safety Administration (NHTSA). We comply with all applicable data use
+        agreements and attribution requirements.
+      </p>
+    </section>
+  </div>
+</Base>

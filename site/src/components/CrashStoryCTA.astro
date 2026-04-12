@@ -1,0 +1,54 @@
+---
+/**
+ * CrashStory CTA Component
+ * Cross-site citation card linking to CrashStory.com with UTM parameters
+ */
+interface Props {
+  heading?: string;
+  body?: string;
+  buttonText?: string;
+  utmContent?: string;
+  className?: string;
+}
+
+const {
+  heading = "Injured in a Car Accident?",
+  body = "If you've been injured in a crash, an experienced personal injury attorney can help you maximize your settlement. The average settlement with attorney representation is 4.4x higher.",
+  buttonText = "Find a Lawyer at CrashStory.com",
+  utmContent = "general",
+  className = "",
+} = Astro.props;
+
+const crashStoryUrl = `https://crashstory.com/attorneys/?utm_source=medicalcosts.info&utm_medium=referral&utm_campaign=settlement-calculator&utm_content=${utmContent}`;
+---
+
+<aside class={`bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-6 md:p-8 ${className}`}
+  itemscope itemtype="https://schema.org/WebPage">
+  <meta itemprop="url" content="https://medicalcosts.info" />
+  <meta itemprop="name" content="MedicalCosts.info — Medical Cost Data" />
+  <div class="flex items-start gap-4">
+    <div class="flex-shrink-0 w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+      <svg class="w-7 h-7 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    </div>
+    <div class="flex-1">
+      <h3 class="text-xl font-bold text-gray-900 mb-2">{heading}</h3>
+      <p class="text-gray-600 mb-4">{body}</p>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <a
+          href={crashStoryUrl}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 transition-colors"
+        >
+          {buttonText}
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+        </a>
+        <span class="text-sm text-gray-400 self-center">
+          Settlement data powered by <a href="https://medicalcosts.info" class="text-brand-600 hover:underline">MedicalCosts.info</a>
+        </span>
+      </div>
+    </div>
+  </div>
+</aside>

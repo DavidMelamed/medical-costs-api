@@ -1,19 +1,29 @@
 ---
 import Base from '@/layouts/Base.astro';
-import { getProcedure, formatCurrencyFull, slugify, STATES } from '@/lib/api';
+import RelatedLinks from '@/components/RelatedLinks.astro';
+import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, formatCurrencyFull, slugify, STATES } from '@/lib/api';
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect('/procedures/');
 
-// The slug could be a CPT code or a procedure-name slug
-// Try as CPT code first, then search by slug
+// The slug could be a CPT code or a human-readable slug
+// Try as CPT code first, then as a human-readable slug via the by-slug endpoint
 let procedure = await getProcedure(slug);
 
-// If not found by code, the slug is a descriptive slug - we'd need a reverse lookup
-// For now, redirect unknown slugs to search
+if (!procedure) {
+  procedure = await getProcedureBySlug(slug);
+}
+
+// If still not found, redirect to search
 if (!procedure) return Astro.redirect(`/procedures/?search=${encodeURIComponent(slug.replace(/-/g, ' '))}`);
 
 const p = procedure as any;
+
+// Fetch related procedures and interesting facts in parallel
+const [relatedProcedures, interestingFacts] = await Promise.all([
+  getRelatedProcedures(p.code),
+  getMetricsFacts(),
+]);
 const geoCosts = p.geographicCosts || [];
 const injuryMappings = p.injuryMappings || [];
 const commercialEstimates = p.commercialEstimates || {};
@@ -25,6 +35,16 @@ const priceStr = p.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityR
 
 const title = `How Much Does ${shortName} Cost? ${priceStr ? `(${priceStr})` : ''} — 2026 Rates | MedicalCosts.info`;
 const description = `${shortName} (CPT ${p.code}) costs ${priceStr || 'vary by location'}. Medicare facility rate, hospital outpatient price, surgery center cost, and estimated commercial insurance rates. Updated 2026 CMS data.`;
+
+// Build cost comparison data for bar chart
+const costBars: Array<{ label: string; sublabel: string; amount: number; color: string }> = [];
+if (p.nationalFacilityRate) costBars.push({ label: 'Medicare', sublabel: 'Facility rate', amount: p.nationalFacilityRate, color: 'bg-brand-500' });
+if (p.hospitalOutpatientCost) costBars.push({ label: 'Hospital Outpatient', sublabel: 'OPPS rate', amount: p.hospitalOutpatientCost, color: 'bg-purple-500' });
+if (p.ascCost) costBars.push({ label: 'Surgery Center', sublabel: 'ASC rate', amount: p.ascCost, color: 'bg-green-500' });
+if (commercialEstimates.facilityLow) costBars.push({ label: 'Commercial Ins.', sublabel: 'Estimated', amount: (commercialEstimates.facilityLow + commercialEstimates.facilityHigh) / 2, color: 'bg-orange-500' });
+const maxCost = Math.max(...costBars.map(b => b.amount), 1);
+
+const pageUrl = `https://medicalcosts.info/costs/${slug}/`;
 
 const schema = {
   "@context": "https://schema.org",
@@ -119,6 +139,32 @@ const faqSchema = {
           </p>
         </div>
 
+        <!-- Visual Cost Comparison Bar Chart -->
+        {costBars.length >= 2 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-1">Cost Comparison by Payer</h2>
+            <p class="text-sm text-gray-500 mb-6">How much {shortName} costs across different settings and payers</p>
+            <div class="space-y-4">
+              {costBars.map(bar => (
+                <div class="flex items-center gap-4">
+                  <div class="w-32 sm:w-40 flex-shrink-0 text-right">
+                    <div class="font-semibold text-gray-900 text-sm">{bar.label}</div>
+                    <div class="text-xs text-gray-400">{bar.sublabel}</div>
+                  </div>
+                  <div class="flex-1">
+                    <div
+                      class={`${bar.color} h-9 rounded-lg flex items-center justify-end pr-3 shadow-sm transition-all`}
+                      style={`width: ${Math.max((bar.amount / maxCost) * 100, 15)}%`}
+                    >
+                      <span class="text-white text-sm font-bold whitespace-nowrap">{formatCurrencyFull(bar.amount)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <!-- Cost comparison cards -->
         <div class="grid sm:grid-cols-2 gap-4">
           {p.nationalFacilityRate && (
@@ -193,6 +239,57 @@ const faqSchema = {
           </div>
         )}
 
+        <!-- Save Money Tips -->
+        <div class="bg-green-50 rounded-xl border border-green-200 p-6">
+          <h2 class="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+            <svg class="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            How to Reduce Your Cost for {shortName}
+          </h2>
+          <p class="text-sm text-gray-600 mb-4">Practical tips that can save you hundreds or thousands of dollars</p>
+          <ul class="space-y-3">
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-green-200 text-green-800 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">1</span>
+              <div>
+                <div class="font-semibold text-gray-900 text-sm">Ask about cash-pay discounts</div>
+                <p class="text-xs text-gray-500">Many hospitals and clinics offer 20-40% discounts for self-pay patients. Always ask before scheduling.</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-green-200 text-green-800 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">2</span>
+              <div>
+                <div class="font-semibold text-gray-900 text-sm">Compare facility vs. office setting costs</div>
+                <p class="text-xs text-gray-500">
+                  {p.nationalNonFacRate && p.nationalFacilityRate && p.nationalNonFacRate !== p.nationalFacilityRate
+                    ? `For this procedure, the office rate (${formatCurrencyFull(p.nationalNonFacRate)}) differs from the facility rate (${formatCurrencyFull(p.nationalFacilityRate)}). Ask if it can be done in an office setting.`
+                    : 'Some procedures cost significantly less in an office setting than a hospital. Ask your provider about options.'}
+                </p>
+              </div>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-green-200 text-green-800 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">3</span>
+              <div>
+                <div class="font-semibold text-gray-900 text-sm">Shop around — costs vary significantly</div>
+                <p class="text-xs text-gray-500">
+                  {geoCosts.length > 2
+                    ? `Medicare rates for this procedure range from ${formatCurrencyFull(Math.min(...geoCosts.filter((g: any) => g.facilityRate).map((g: any) => g.facilityRate)))} to ${formatCurrencyFull(Math.max(...geoCosts.filter((g: any) => g.facilityRate).map((g: any) => g.facilityRate)))} depending on location. Commercial rates vary even more.`
+                    : 'Costs can vary 2-3x between providers in the same city. Get quotes from multiple facilities.'}
+                </p>
+              </div>
+            </li>
+            {p.ascCost && (
+              <li class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-green-200 text-green-800 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">4</span>
+                <div>
+                  <div class="font-semibold text-gray-900 text-sm">Check ambulatory surgery centers (ASCs)</div>
+                  <p class="text-xs text-gray-500">
+                    This procedure is available at ASCs for {formatCurrencyFull(p.ascCost)}{p.hospitalOutpatientCost ? `, compared to ${formatCurrencyFull(p.hospitalOutpatientCost)} at hospital outpatient departments` : ''}. ASCs often offer lower costs with comparable quality.
+                  </p>
+                </div>
+              </li>
+            )}
+          </ul>
+        </div>
+
         <!-- RVU Details -->
         {p.workRvu && (
           <div class="bg-white rounded-xl border border-gray-200 p-6">
@@ -228,6 +325,31 @@ const faqSchema = {
             <p class="text-xs text-gray-400 mt-4">
               Payment = Total RVU ({p.totalRvu?.toFixed(2)}) x CF ($33.40) = {p.totalRvu ? formatCurrencyFull(p.totalRvu * 33.40) : 'N/A'}
             </p>
+          </div>
+        )}
+
+        <!-- Related Procedures -->
+        {relatedProcedures.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gray-50">
+              <h2 class="text-xl font-bold text-gray-900">Related Procedures</h2>
+              <p class="text-sm text-gray-500">Similar procedures in the same category or body system</p>
+            </div>
+            <div class="divide-y">
+              {relatedProcedures.map((rp: any) => (
+                <a href={`/costs/${rp.slug || rp.code}/`} class="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition-colors">
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium text-gray-900 truncate">{rp.description}</div>
+                    <div class="text-xs text-gray-500">{rp.code} &middot; {rp.category}</div>
+                  </div>
+                  {rp.nationalFacilityRate && (
+                    <div class="ml-4 text-sm font-semibold text-brand-700 whitespace-nowrap">
+                      {formatCurrencyFull(rp.nationalFacilityRate)}
+                    </div>
+                  )}
+                </a>
+              ))}
+            </div>
           </div>
         )}
 
@@ -269,6 +391,39 @@ const faqSchema = {
                 rural regions. Commercial insurers follow similar geographic patterns.
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+
+        <!-- Share This Page -->
+        <div class="bg-gray-50 rounded-xl border border-gray-200 p-6">
+          <h2 class="text-lg font-bold text-gray-900 mb-3">Share This Cost Information</h2>
+          <div class="flex flex-wrap gap-3">
+            <a
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${shortName} costs ${priceStr || 'vary by location'} at Medicare rates. See full cost breakdown:`)}&url=${encodeURIComponent(pageUrl)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              Post on X
+            </a>
+            <a
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+              Share on Facebook
+            </a>
+            <button
+              onclick="navigator.clipboard.writeText(window.location.href);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy Link',2000)"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+              Copy Link
+            </button>
           </div>
         </div>
       </div>
@@ -328,6 +483,22 @@ const faqSchema = {
           </div>
           <a href="/states/" class="text-xs text-brand-600 hover:underline mt-2 block">All states →</a>
         </div>
+
+        <RelatedLinks entityType="procedure" entityId={p.code} />
+
+        {interestingFacts.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 class="font-bold text-gray-900 mb-3">Did You Know?</h3>
+            <ul class="space-y-3">
+              {interestingFacts.slice(0, 4).map((fact: any) => (
+                <li class="text-xs text-gray-600">
+                  <div class="font-semibold text-gray-800 text-sm mb-0.5">{fact.label}</div>
+                  {fact.detail}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div class="bg-yellow-50 rounded-xl p-5 border border-yellow-200">
           <p class="text-xs text-yellow-700">

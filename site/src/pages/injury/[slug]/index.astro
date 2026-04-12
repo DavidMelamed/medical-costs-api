@@ -1,0 +1,322 @@
+---
+import Base from '@/layouts/Base.astro';
+import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
+import { getInjury, getSettlementEstimate, formatCurrency, formatCurrencyFull } from '@/lib/api';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/conditions/');
+
+const condition = await getInjury(slug);
+if (!condition) return Astro.redirect('/conditions/');
+
+const c = condition;
+const breakdown = c.treatmentBreakdown || [];
+const totalCost = c.estimatedTotalCost || { low: 0, high: 0 };
+
+// Get settlement estimates for all severities
+const [mildEst, modEst, severeEst] = await Promise.all([
+  getSettlementEstimate(slug, 'mild'),
+  getSettlementEstimate(slug, 'moderate'),
+  getSettlementEstimate(slug, 'severe'),
+]);
+
+const costRange = c.moderateCostLow && c.moderateCostHigh
+  ? `${formatCurrency(c.moderateCostLow)} - ${formatCurrency(c.moderateCostHigh)}`
+  : totalCost.low > 0 ? `${formatCurrency(totalCost.low)} - ${formatCurrency(totalCost.high)}` : 'varies';
+
+const title = `${c.name} Treatment Costs & Settlement Value — 2026 Guide | MedicalCosts.info`;
+const description = `${c.name} treatment costs ${costRange}. See procedure-by-procedure breakdown, settlement multipliers (${modEst ? modEst.settlement.multiplierLow + 'x-' + modEst.settlement.multiplierHigh + 'x' : '2x-3x'}), recovery timeline, and estimated claim value. 2026 CMS Medicare data.`;
+
+const phaseLabels: Record<string, string> = {
+  EMERGENCY: 'Emergency Care', ACUTE: 'Diagnosis & Acute Treatment',
+  SURGICAL: 'Surgery', REHABILITATION: 'Rehabilitation',
+  CHRONIC: 'Ongoing / Chronic Care', LIFETIME: 'Lifetime Needs',
+};
+
+const phaseColors: Record<string, string> = {
+  EMERGENCY: 'border-red-300 bg-red-50', ACUTE: 'border-orange-300 bg-orange-50',
+  SURGICAL: 'border-purple-300 bg-purple-50', REHABILITATION: 'border-blue-300 bg-blue-50',
+  CHRONIC: 'border-yellow-300 bg-yellow-50', LIFETIME: 'border-gray-300 bg-gray-50',
+};
+
+const schema = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "MedicalCondition",
+      "name": c.name,
+      "description": c.description,
+      "associatedAnatomy": c.bodyRegion ? { "@type": "AnatomicalStructure", "name": c.bodyRegion } : undefined,
+      "code": c.icd10CodeStart ? { "@type": "MedicalCode", "codingSystem": "ICD-10", "codeValue": c.icd10CodeStart } : undefined,
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": `How much does ${c.name} treatment cost?`,
+          "acceptedAnswer": { "@type": "Answer", "text": `${c.name} treatment typically costs ${costRange} for moderate severity. Mild cases cost ${c.mildCostLow ? formatCurrencyFull(c.mildCostLow) + ' - ' + formatCurrencyFull(c.mildCostHigh) : 'less'}, while severe cases can cost ${c.severeCostLow ? formatCurrencyFull(c.severeCostLow) + ' - ' + formatCurrencyFull(c.severeCostHigh) : 'significantly more'}. Costs are based on 2026 CMS Medicare data from MedicalCosts.info.` }
+        },
+        {
+          "@type": "Question",
+          "name": `How much is a ${c.name} settlement worth?`,
+          "acceptedAnswer": { "@type": "Answer", "text": `A ${c.name} settlement typically ranges from ${modEst ? formatCurrencyFull(modEst.settlement.totalEstimateLow) + ' to ' + formatCurrencyFull(modEst.settlement.totalEstimateHigh) : 'varies'} for moderate severity using the insurance industry multiplier method. Settlement value depends on medical costs, severity, lost wages, and other factors. Use our free settlement calculator for a personalized estimate.` }
+        },
+        {
+          "@type": "Question",
+          "name": `How long is recovery from ${c.name}?`,
+          "acceptedAnswer": { "@type": "Answer", "text": `Recovery from ${c.name} varies by severity: mild cases typically recover in ${modEst ? mildEst?.lostWages.recoveryWeeks : 6}-${modEst ? mildEst?.lostWages.recoveryWeeks ? mildEst.lostWages.recoveryWeeks * 2 : 12 : 12} weeks, moderate cases in ${modEst?.lostWages.recoveryWeeks || 16} weeks, and severe cases may take ${severeEst?.lostWages.recoveryWeeks || 52} weeks or longer.` }
+        },
+      ]
+    }
+  ]
+};
+---
+
+<Base title={title} description={description} canonical={`/injury/${slug}/`} schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/conditions/" class="hover:text-brand-600">Conditions</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">{c.name}</span>
+    </nav>
+
+    <div class="grid lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-8">
+        <!-- Header -->
+        <div>
+          {c.bodyRegion && <span class="text-sm text-brand-600 font-medium">{c.bodyRegion}</span>}
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mt-1 mb-4">
+            How Much Does {c.name} Cost to Treat? What's Your Case Worth?
+          </h1>
+          <p class="text-lg text-gray-600">{c.description}</p>
+        </div>
+
+        <!-- Cost Summary Cards -->
+        <div class="grid sm:grid-cols-3 gap-4">
+          {c.mildCostLow != null && (
+            <div class="bg-white rounded-xl border border-green-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Mild</div>
+              <div class="text-2xl font-bold text-green-700">{formatCurrency(c.mildCostLow)} — {formatCurrency(c.mildCostHigh || 0)}</div>
+              <div class="text-xs text-gray-400 mt-1">treatment cost</div>
+            </div>
+          )}
+          {c.moderateCostLow != null && (
+            <div class="bg-white rounded-xl border-2 border-orange-300 p-5">
+              <div class="text-sm text-gray-500 mb-1">Moderate</div>
+              <div class="text-2xl font-bold text-orange-700">{formatCurrency(c.moderateCostLow)} — {formatCurrency(c.moderateCostHigh || 0)}</div>
+              <div class="text-xs text-gray-400 mt-1">treatment cost</div>
+            </div>
+          )}
+          {c.severeCostLow != null && (
+            <div class="bg-white rounded-xl border border-red-200 p-5">
+              <div class="text-sm text-gray-500 mb-1">Severe</div>
+              <div class="text-2xl font-bold text-red-700">{formatCurrency(c.severeCostLow)} — {formatCurrency(c.severeCostHigh || 0)}</div>
+              <div class="text-xs text-gray-400 mt-1">treatment cost</div>
+            </div>
+          )}
+        </div>
+
+        <!-- Settlement Multipliers -->
+        {modEst && (
+          <div class="bg-brand-50 border border-brand-200 rounded-2xl p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Settlement Multipliers for {c.name}</h2>
+            <p class="text-gray-600 mb-4">
+              Insurance adjusters use the multiplier method to calculate settlements.
+              Your medical bills and lost wages are multiplied by a severity factor:
+            </p>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-brand-200">
+                    <th class="text-left py-2 font-semibold text-gray-700">Severity</th>
+                    <th class="text-right py-2 font-semibold text-gray-700">Multiplier</th>
+                    <th class="text-right py-2 font-semibold text-gray-700">Medical Costs</th>
+                    <th class="text-right py-2 font-semibold text-gray-700">Settlement Range</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mildEst && (
+                    <tr class="border-b border-brand-100">
+                      <td class="py-2 text-gray-700">Mild</td>
+                      <td class="py-2 text-right">{mildEst.settlement.multiplierLow}x - {mildEst.settlement.multiplierHigh}x</td>
+                      <td class="py-2 text-right">{formatCurrencyFull(mildEst.medicalCosts.low)} - {formatCurrencyFull(mildEst.medicalCosts.high)}</td>
+                      <td class="py-2 text-right font-bold text-green-700">{formatCurrencyFull(mildEst.settlement.totalEstimateLow)} - {formatCurrencyFull(mildEst.settlement.totalEstimateHigh)}</td>
+                    </tr>
+                  )}
+                  <tr class="border-b border-brand-100 bg-brand-50/50">
+                    <td class="py-2 text-gray-700 font-medium">Moderate</td>
+                    <td class="py-2 text-right">{modEst.settlement.multiplierLow}x - {modEst.settlement.multiplierHigh}x</td>
+                    <td class="py-2 text-right">{formatCurrencyFull(modEst.medicalCosts.low)} - {formatCurrencyFull(modEst.medicalCosts.high)}</td>
+                    <td class="py-2 text-right font-bold text-orange-700">{formatCurrencyFull(modEst.settlement.totalEstimateLow)} - {formatCurrencyFull(modEst.settlement.totalEstimateHigh)}</td>
+                  </tr>
+                  {severeEst && (
+                    <tr>
+                      <td class="py-2 text-gray-700">Severe</td>
+                      <td class="py-2 text-right">{severeEst.settlement.multiplierLow}x - {severeEst.settlement.multiplierHigh}x</td>
+                      <td class="py-2 text-right">{formatCurrencyFull(severeEst.medicalCosts.low)} - {formatCurrencyFull(severeEst.medicalCosts.high)}</td>
+                      <td class="py-2 text-right font-bold text-red-700">{formatCurrencyFull(severeEst.settlement.totalEstimateLow)} - {formatCurrencyFull(severeEst.settlement.totalEstimateHigh)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <p class="text-xs text-gray-400 mt-3">
+              Formula: Total Settlement = (Medical Bills + Lost Wages) x Severity Multiplier.
+              <a href="/settlement-calculator/" class="text-brand-600 hover:underline">Use our calculator for a personalized estimate.</a>
+            </p>
+          </div>
+        )}
+
+        <!-- Treatment Breakdown by Phase -->
+        {breakdown.length > 0 && (
+          <div>
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Treatment Breakdown by Phase</h2>
+            <div class="space-y-4">
+              {breakdown.map((phase: any) => (
+                <div class={`rounded-xl border-l-4 p-5 ${phaseColors[phase.phase] || 'border-gray-300 bg-gray-50'}`}>
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-bold text-gray-900">{phaseLabels[phase.phase] || phase.phase}</h3>
+                    <span class="text-sm font-semibold text-gray-700">
+                      {formatCurrencyFull(phase.subtotalLow)} — {formatCurrencyFull(phase.subtotalHigh)}
+                    </span>
+                  </div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                      <thead>
+                        <tr class="text-gray-500 text-xs">
+                          <th class="text-left py-1">Procedure</th>
+                          <th class="text-left py-1">Code</th>
+                          <th class="text-right py-1">Medicare Rate</th>
+                          <th class="text-right py-1">Est. Commercial</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {phase.procedures.map((p: any) => (
+                          <tr class="border-t border-gray-200/50">
+                            <td class="py-1.5">
+                              <a href={`/procedures/${p.code}/`} class="text-brand-600 hover:underline">{p.description}</a>
+                            </td>
+                            <td class="py-1.5 font-mono text-xs text-gray-400">{p.code}</td>
+                            <td class="py-1.5 text-right">{formatCurrencyFull(p.medicareRate)}</td>
+                            <td class="py-1.5 text-right font-medium">{formatCurrencyFull(p.estimatedCostLow)} - {formatCurrencyFull(p.estimatedCostHigh)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <!-- Recovery Timeline -->
+        {modEst && (
+          <div class="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Recovery Timeline</h2>
+            <div class="space-y-3">
+              {mildEst && (
+                <div class="flex items-center gap-4">
+                  <span class="text-sm font-medium text-gray-500 w-24">Mild</span>
+                  <div class="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div class="bg-green-400 h-full rounded-full" style={`width: ${Math.min(100, (mildEst.lostWages.recoveryWeeks / 52) * 100)}%`}></div>
+                  </div>
+                  <span class="text-sm font-semibold text-gray-700 w-24 text-right">{mildEst.lostWages.recoveryWeeks} weeks</span>
+                </div>
+              )}
+              <div class="flex items-center gap-4">
+                <span class="text-sm font-medium text-gray-500 w-24">Moderate</span>
+                <div class="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                  <div class="bg-orange-400 h-full rounded-full" style={`width: ${Math.min(100, (modEst.lostWages.recoveryWeeks / 52) * 100)}%`}></div>
+                </div>
+                <span class="text-sm font-semibold text-gray-700 w-24 text-right">{modEst.lostWages.recoveryWeeks} weeks</span>
+              </div>
+              {severeEst && (
+                <div class="flex items-center gap-4">
+                  <span class="text-sm font-medium text-gray-500 w-24">Severe</span>
+                  <div class="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                    <div class="bg-red-400 h-full rounded-full" style={`width: ${Math.min(100, (severeEst.lostWages.recoveryWeeks / 52) * 100)}%`}></div>
+                  </div>
+                  <span class="text-sm font-semibold text-gray-700 w-24 text-right">{severeEst.lostWages.recoveryWeeks} weeks</span>
+                </div>
+              )}
+            </div>
+            <p class="text-xs text-gray-400 mt-3">Recovery timelines are estimates and vary by individual circumstances.</p>
+          </div>
+        )}
+
+        <!-- Links -->
+        <div class="flex flex-wrap gap-3">
+          <a href={`/conditions/${slug}/`}
+            class="px-5 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:border-brand-500 transition-colors">
+            Detailed Treatment Costs
+          </a>
+          <a href={`/injury/${slug}/settlement-value/`}
+            class="px-5 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 transition-colors">
+            Settlement Value Guide
+          </a>
+          <a href={`/settlement-calculator/?injury=${slug}&severity=moderate`}
+            class="px-5 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:border-brand-500 transition-colors">
+            Settlement Calculator
+          </a>
+        </div>
+
+        <CrashStoryCTA utmContent={`injury-${slug}`} />
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="space-y-6">
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 sticky top-24">
+          {modEst && (
+            <div class="mb-6">
+              <div class="text-sm text-gray-500 mb-1">Moderate Settlement Estimate</div>
+              <div class="text-2xl font-bold text-green-700">
+                {formatCurrencyFull(modEst.settlement.totalEstimateLow)} - {formatCurrencyFull(modEst.settlement.totalEstimateHigh)}
+              </div>
+              <a href={`/settlement-calculator/?injury=${slug}&severity=moderate`}
+                class="inline-block mt-2 text-sm text-brand-600 hover:underline">
+                Get personalized estimate
+              </a>
+            </div>
+          )}
+
+          <h3 class="font-bold text-gray-900 mb-3">Quick Facts</h3>
+          <dl class="space-y-2 text-sm">
+            {c.bodyRegion && (
+              <div>
+                <dt class="text-gray-500">Body Region</dt>
+                <dd class="font-medium text-gray-900">{c.bodyRegion}</dd>
+              </div>
+            )}
+            <div>
+              <dt class="text-gray-500">Crash Relevance</dt>
+              <dd class="font-medium text-gray-900">{c.crashRelevance?.replace(/_/g, ' ')}</dd>
+            </div>
+            {c.icd10CodeStart && (
+              <div>
+                <dt class="text-gray-500">ICD-10 Code</dt>
+                <dd class="font-mono text-gray-900">{c.icd10CodeStart}{c.icd10CodeEnd ? ` - ${c.icd10CodeEnd}` : ''}</dd>
+              </div>
+            )}
+            <div>
+              <dt class="text-gray-500">Treatment Phases</dt>
+              <dd class="font-medium text-gray-900">{breakdown.length}</dd>
+            </div>
+          </dl>
+
+          <hr class="my-4" />
+
+          <h3 class="font-bold text-gray-900 mb-3">Data Sources</h3>
+          <ul class="text-xs text-gray-500 space-y-1">
+            <li>CMS Medicare PFS CY2026</li>
+            <li>Insurance Research Council 2025</li>
+            <li>Bureau of Labor Statistics Q1 2026</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+</Base>

@@ -1,0 +1,100 @@
+---
+import { getGraphRelationships, type GraphRelationship } from '@/lib/api';
+
+interface Props {
+  entityType: string;
+  entityId: string;
+}
+
+const { entityType, entityId } = Astro.props;
+const graph = await getGraphRelationships(entityType, entityId);
+
+// Group and label relationships
+const sections: Array<{ title: string; icon: string; items: Array<{ label: string; href: string; weight: number }> }> = [];
+
+if (graph?.relationships) {
+  const rels = graph.relationships;
+
+  // Related Procedures (same_category)
+  const sameCategory = (rels['same_category'] || []).filter(r => r.type === 'procedure').slice(0, 8);
+  if (sameCategory.length > 0) {
+    sections.push({
+      title: 'Related Procedures',
+      icon: '&#9881;',
+      items: sameCategory.map(r => ({
+        label: `CPT ${r.id}`,
+        href: `/costs/${r.id}/`,
+        weight: r.weight,
+      })),
+    });
+  }
+
+  // Commonly Performed Together (commonly_paired)
+  const paired = (rels['commonly_paired'] || []).filter(r => r.type === 'procedure').slice(0, 8);
+  if (paired.length > 0) {
+    sections.push({
+      title: 'Commonly Performed Together',
+      icon: '&#128279;',
+      items: paired.map(r => ({
+        label: `CPT ${r.id}`,
+        href: `/costs/${r.id}/`,
+        weight: r.weight,
+      })),
+    });
+  }
+
+  // Related Conditions (treats / diagnosed_by)
+  const treatsConditions = (rels['treats'] || []).filter(r => r.type === 'condition').slice(0, 8);
+  const diagConditions = (rels['diagnosed_by'] || []).filter(r => r.type === 'procedure').slice(0, 8);
+  const conditionItems = [
+    ...treatsConditions.map(r => ({ label: r.id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), href: `/conditions/${r.id}/`, weight: r.weight })),
+    ...diagConditions.map(r => ({ label: `CPT ${r.id}`, href: `/costs/${r.id}/`, weight: r.weight })),
+  ].slice(0, 10);
+  if (conditionItems.length > 0) {
+    sections.push({
+      title: entityType === 'procedure' ? 'Related Conditions' : 'Related Procedures',
+      icon: '&#128209;',
+      items: conditionItems,
+    });
+  }
+
+  // Same Body System (condition -> condition)
+  const sameBody = (rels['same_body_system'] || []).filter(r => r.type === 'condition').slice(0, 8);
+  if (sameBody.length > 0) {
+    sections.push({
+      title: 'Same Body System',
+      icon: '&#129516;',
+      items: sameBody.map(r => ({
+        label: r.id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        href: `/conditions/${r.id}/`,
+        weight: r.weight,
+      })),
+    });
+  }
+}
+---
+
+{sections.length > 0 && (
+  <div class="bg-white rounded-xl border border-gray-200 p-6">
+    <h3 class="font-bold text-gray-900 mb-4">Related Topics</h3>
+    <div class="space-y-5">
+      {sections.map(section => (
+        <div>
+          <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <span set:html={section.icon} /> {section.title}
+          </h4>
+          <ul class="space-y-1.5">
+            {section.items.map(item => (
+              <li>
+                <a href={item.href} class="text-sm text-brand-600 hover:text-brand-800 hover:underline flex items-center justify-between group">
+                  <span class="group-hover:translate-x-0.5 transition-transform">{item.label}</span>
+                  {item.weight >= 0.8 && <span class="text-xs text-green-500 font-medium">Strong</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </div>
+)}

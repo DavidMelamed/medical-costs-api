@@ -175,3 +175,20 @@ CREATE TABLE injury_cost_aggregates (
 
 CREATE INDEX idx_agg_mechanism ON injury_cost_aggregates(mechanism);
 CREATE INDEX idx_agg_state ON injury_cost_aggregates(state_code);
+
+-- ============================================================================
+-- Knowledge Graph: Entity Relationships
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS entity_relationships (
+  id TEXT PRIMARY KEY,
+  source_type TEXT NOT NULL,  -- 'procedure', 'condition', 'body_system', 'drug', 'category'
+  source_id TEXT NOT NULL,
+  relationship TEXT NOT NULL,  -- 'treats', 'diagnosed_by', 'same_category', 'same_body_system', 'commonly_paired', 'alternative_to'
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  weight REAL DEFAULT 1.0,  -- relevance strength 0-1
+  UNIQUE(source_type, source_id, relationship, target_type, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_er_source ON entity_relationships(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_er_target ON entity_relationships(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_er_rel ON entity_relationships(relationship);

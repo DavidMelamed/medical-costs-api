@@ -1,0 +1,379 @@
+---
+import Base from '@/layouts/Base.astro';
+import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
+import { getInjury, getSettlementEstimate, formatCurrency, formatCurrencyFull } from '@/lib/api';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/conditions/');
+
+const condition = await getInjury(slug);
+if (!condition) return Astro.redirect('/conditions/');
+
+const c = condition;
+
+// Get settlement estimates for all severities
+const [mildEst, modEst, severeEst, catEst] = await Promise.all([
+  getSettlementEstimate(slug, 'mild'),
+  getSettlementEstimate(slug, 'moderate'),
+  getSettlementEstimate(slug, 'severe'),
+  getSettlementEstimate(slug, 'catastrophic'),
+]);
+
+const modRange = modEst
+  ? `${formatCurrencyFull(modEst.settlement.totalEstimateLow)} to ${formatCurrencyFull(modEst.settlement.totalEstimateHigh)}`
+  : 'varies by case';
+
+const title = `Average ${c.name} Settlement Amount — Calculator & Data | MedicalCosts.info`;
+const description = `Average ${c.name} settlement: ${modRange}. See settlement ranges by severity, multiplier breakdown, medical cost documentation importance, and factors that affect your claim value.`;
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": `What is the average ${c.name} settlement amount?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `The average ${c.name} settlement for moderate severity ranges from ${modRange}. Mild cases settle for ${mildEst ? formatCurrencyFull(mildEst.settlement.totalEstimateLow) + ' to ' + formatCurrencyFull(mildEst.settlement.totalEstimateHigh) : 'less'}, while severe cases can reach ${severeEst ? formatCurrencyFull(severeEst.settlement.totalEstimateLow) + ' to ' + formatCurrencyFull(severeEst.settlement.totalEstimateHigh) : 'significantly more'}. These estimates are based on medical cost data from MedicalCosts.info and insurance industry multiplier methods.` }
+    },
+    {
+      "@type": "Question",
+      "name": `How are ${c.name} settlements calculated?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `${c.name} settlements are calculated using the multiplier method: Total Settlement = (Medical Bills + Lost Wages) x Severity Multiplier. For moderate ${c.name}, the multiplier is typically ${modEst ? modEst.settlement.multiplierLow + 'x to ' + modEst.settlement.multiplierHigh + 'x' : '2x to 3x'}. Medical bills are the foundation — thorough documentation of treatment costs directly increases settlement value.` }
+    },
+    {
+      "@type": "Question",
+      "name": `How do medical bills affect a ${c.name} settlement?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `Medical bills are the primary driver of ${c.name} settlement value. ${c.name} treatment costs range from ${c.mildCostLow ? formatCurrencyFull(c.mildCostLow) : 'a few thousand dollars'} for mild cases to ${c.severeCostHigh ? formatCurrencyFull(c.severeCostHigh) : 'tens of thousands'} for severe cases. Since the multiplier is applied to these costs, every dollar of documented medical treatment increases your settlement by ${modEst ? modEst.settlement.multiplierLow + 'x to ' + modEst.settlement.multiplierHigh + 'x' : '2-3x'}.` }
+    },
+    {
+      "@type": "Question",
+      "name": `What factors increase a ${c.name} settlement?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `Key factors that increase a ${c.name} settlement include: (1) Clear liability/fault by the other party, (2) Thorough medical documentation with itemized bills, (3) Objective diagnostic evidence like MRI/CT scans, (4) Permanent impairment documented by a physician, (5) Consistent treatment without gaps in care, (6) Attorney representation (settlements average 4.4x higher with an attorney per the Insurance Research Council).` }
+    },
+    {
+      "@type": "Question",
+      "name": `Should I hire a lawyer for a ${c.name} claim?`,
+      "acceptedAnswer": { "@type": "Answer", "text": `Yes, statistics strongly support hiring an attorney for a ${c.name} claim. The Insurance Research Council (2025) found that claimants with attorneys receive an average of $77,600 compared to $17,600 without — 4.4x more. Most personal injury attorneys work on contingency, meaning you pay nothing upfront and they take a percentage (typically 33%) only if you win.` }
+    },
+  ]
+};
+---
+
+<Base title={title} description={description} canonical={`/injury/${slug}/settlement-value/`} schema={faqSchema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <nav class="text-sm text-gray-500 mb-6">
+      <a href="/" class="hover:text-brand-600">Home</a>
+      <span class="mx-2">/</span>
+      <a href="/conditions/" class="hover:text-brand-600">Conditions</a>
+      <span class="mx-2">/</span>
+      <a href={`/injury/${slug}/`} class="hover:text-brand-600">{c.name}</a>
+      <span class="mx-2">/</span>
+      <span class="text-gray-900 font-medium">Settlement Value</span>
+    </nav>
+
+    <div class="grid lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-8">
+        <!-- Header -->
+        <div>
+          {c.bodyRegion && <span class="text-sm text-brand-600 font-medium">{c.bodyRegion}</span>}
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mt-1 mb-4">
+            How Much Is a {c.name} Case Worth?
+          </h1>
+          <p class="text-lg text-gray-600">
+            Estimated settlement ranges for {c.name} based on medical cost data from
+            <a href="https://medicalcosts.info" class="text-brand-600 hover:underline">MedicalCosts.info</a>,
+            insurance industry multipliers, and lost wage calculations.
+          </p>
+        </div>
+
+        <!-- Settlement Range Hero -->
+        {modEst && (
+          <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8 text-center">
+            <div class="text-sm text-gray-500 mb-1">Average {c.name} Settlement (Moderate)</div>
+            <div class="text-4xl md:text-5xl font-extrabold text-green-700">
+              {formatCurrencyFull(modEst.settlement.totalEstimateLow)} — {formatCurrencyFull(modEst.settlement.totalEstimateHigh)}
+            </div>
+            <div class="text-sm text-gray-500 mt-2">
+              Based on {modEst.settlement.multiplierLow}x — {modEst.settlement.multiplierHigh}x multiplier
+            </div>
+          </div>
+        )}
+
+        <!-- Settlement Ranges by Severity -->
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-4">{c.name} Settlement Ranges by Severity</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-left px-4 py-3 font-semibold text-gray-700">Severity</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-700">Medical Costs</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-700">Multiplier</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-700">Lost Wages</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-700">Total Settlement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mildEst && (
+                  <tr class="border-t border-gray-100">
+                    <td class="px-4 py-3">
+                      <span class="inline-block w-3 h-3 rounded-full bg-green-400 mr-2"></span>
+                      Mild
+                    </td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(mildEst.medicalCosts.low)} - {formatCurrencyFull(mildEst.medicalCosts.high)}</td>
+                    <td class="px-4 py-3 text-right">{mildEst.settlement.multiplierLow}x - {mildEst.settlement.multiplierHigh}x</td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(mildEst.lostWages.low)} - {formatCurrencyFull(mildEst.lostWages.high)}</td>
+                    <td class="px-4 py-3 text-right font-bold text-green-700">{formatCurrencyFull(mildEst.settlement.totalEstimateLow)} - {formatCurrencyFull(mildEst.settlement.totalEstimateHigh)}</td>
+                  </tr>
+                )}
+                {modEst && (
+                  <tr class="border-t border-gray-100 bg-yellow-50/50">
+                    <td class="px-4 py-3">
+                      <span class="inline-block w-3 h-3 rounded-full bg-yellow-400 mr-2"></span>
+                      <strong>Moderate</strong>
+                    </td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(modEst.medicalCosts.low)} - {formatCurrencyFull(modEst.medicalCosts.high)}</td>
+                    <td class="px-4 py-3 text-right">{modEst.settlement.multiplierLow}x - {modEst.settlement.multiplierHigh}x</td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(modEst.lostWages.low)} - {formatCurrencyFull(modEst.lostWages.high)}</td>
+                    <td class="px-4 py-3 text-right font-bold text-orange-700">{formatCurrencyFull(modEst.settlement.totalEstimateLow)} - {formatCurrencyFull(modEst.settlement.totalEstimateHigh)}</td>
+                  </tr>
+                )}
+                {severeEst && (
+                  <tr class="border-t border-gray-100">
+                    <td class="px-4 py-3">
+                      <span class="inline-block w-3 h-3 rounded-full bg-orange-400 mr-2"></span>
+                      Severe
+                    </td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(severeEst.medicalCosts.low)} - {formatCurrencyFull(severeEst.medicalCosts.high)}</td>
+                    <td class="px-4 py-3 text-right">{severeEst.settlement.multiplierLow}x - {severeEst.settlement.multiplierHigh}x</td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(severeEst.lostWages.low)} - {formatCurrencyFull(severeEst.lostWages.high)}</td>
+                    <td class="px-4 py-3 text-right font-bold text-red-700">{formatCurrencyFull(severeEst.settlement.totalEstimateLow)} - {formatCurrencyFull(severeEst.settlement.totalEstimateHigh)}</td>
+                  </tr>
+                )}
+                {catEst && (
+                  <tr class="border-t border-gray-100">
+                    <td class="px-4 py-3">
+                      <span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span>
+                      Catastrophic
+                    </td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(catEst.medicalCosts.low)} - {formatCurrencyFull(catEst.medicalCosts.high)}</td>
+                    <td class="px-4 py-3 text-right">{catEst.settlement.multiplierLow}x - {catEst.settlement.multiplierHigh}x</td>
+                    <td class="px-4 py-3 text-right">{formatCurrencyFull(catEst.lostWages.low)} - {formatCurrencyFull(catEst.lostWages.high)}</td>
+                    <td class="px-4 py-3 text-right font-bold text-red-800">{formatCurrencyFull(catEst.settlement.totalEstimateLow)} - {formatCurrencyFull(catEst.settlement.totalEstimateHigh)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">
+            Settlement data calculated from <a href="https://medicalcosts.info" class="text-brand-600 hover:underline">MedicalCosts.info</a> medical cost data and insurance industry multiplier method.
+          </p>
+        </div>
+
+        <!-- How Settlements Are Calculated -->
+        <div class="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4">How {c.name} Settlements Are Calculated</h2>
+          <p class="text-gray-600 mb-4">
+            Insurance companies and personal injury attorneys use the <strong>multiplier method</strong> to estimate
+            the value of a {c.name} claim. Here's the formula:
+          </p>
+          <div class="bg-gray-50 rounded-xl p-4 font-mono text-sm text-center mb-4">
+            Total Settlement = (Medical Bills + Lost Wages) x Severity Multiplier
+          </div>
+          <div class="space-y-3 text-gray-600">
+            <p>
+              <strong>Medical Bills</strong> form the foundation of your claim. For {c.name},
+              typical treatment costs range from {c.mildCostLow ? formatCurrencyFull(c.mildCostLow) : 'a few thousand'} (mild)
+              to {c.severeCostHigh ? formatCurrencyFull(c.severeCostHigh) : 'tens of thousands'} (severe).
+              Every dollar of documented medical expenses increases your settlement by the multiplier amount.
+            </p>
+            <p>
+              <strong>Lost Wages</strong> include income lost during recovery.
+              {modEst && `For moderate ${c.name}, the typical recovery is ${modEst.lostWages.recoveryWeeks} weeks, resulting in ${formatCurrencyFull(modEst.lostWages.low)} to ${formatCurrencyFull(modEst.lostWages.high)} in lost wages.`}
+            </p>
+            <p>
+              <strong>The Severity Multiplier</strong> accounts for pain and suffering, emotional distress,
+              and diminished quality of life. More severe injuries warrant higher multipliers because
+              the non-economic impact is proportionally greater.
+            </p>
+          </div>
+        </div>
+
+        <!-- Medical Cost Documentation -->
+        <div class="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4">Why Medical Cost Documentation Matters</h2>
+          <p class="text-gray-600 mb-4">
+            Your medical bills are the single most important factor in determining your {c.name} settlement value.
+            Since the multiplier is applied to your economic damages, thorough documentation of every treatment
+            directly increases your claim's worth.
+          </p>
+          <h3 class="font-bold text-gray-900 mb-2">What to Document</h3>
+          <ul class="text-gray-600 space-y-2 mb-4">
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <span>All ER visits, doctor appointments, and specialist referrals</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <span>Imaging studies (MRI, CT, X-rays) with itemized billing</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <span>Physical therapy and rehabilitation sessions</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <span>Prescription medications and medical equipment</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <span>Out-of-pocket expenses (transportation to appointments, home modifications)</span>
+            </li>
+          </ul>
+          <p class="text-sm text-gray-500">
+            Use <a href={`/conditions/${slug}/`} class="text-brand-600 hover:underline">our treatment cost breakdown for {c.name}</a>
+            to understand what each procedure costs and ensure your bills align with typical rates.
+          </p>
+        </div>
+
+        <!-- Factors That Affect Settlement -->
+        <div class="bg-white rounded-2xl border border-gray-200 p-6">
+          <h2 class="text-2xl font-bold text-gray-900 mb-4">Factors That Affect Your {c.name} Settlement</h2>
+          <div class="grid sm:grid-cols-2 gap-4">
+            {[
+              { factor: 'Clear Liability', desc: '100% fault on the other driver significantly increases the multiplier.' },
+              { factor: 'Medical Documentation', desc: 'Thorough, itemized bills with CPT codes carry more weight than summary statements.' },
+              { factor: 'Objective Evidence', desc: 'MRI/CT findings, surgical records, and diagnostic tests are more compelling than subjective complaints.' },
+              { factor: 'Permanent Impairment', desc: 'Any permanent injury or disability documented by an IME increases the multiplier.' },
+              { factor: 'Consistent Treatment', desc: 'Gaps in care give insurers a reason to argue your injury is not serious.' },
+              { factor: 'Attorney Representation', desc: 'Settlements average 4.4x higher with legal representation (IRC 2025).' },
+            ].map(item => (
+              <div class="p-4 bg-gray-50 rounded-xl">
+                <div class="font-bold text-gray-900 text-sm mb-1">{item.factor}</div>
+                <div class="text-xs text-gray-600">{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <!-- With vs Without Attorney -->
+        {modEst && (
+          <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">With vs. Without an Attorney</h2>
+            <div class="grid sm:grid-cols-2 gap-6 mb-4">
+              <div class="text-center p-4 bg-white rounded-xl">
+                <div class="text-sm text-gray-500 mb-1">Without Attorney</div>
+                <div class="text-3xl font-bold text-gray-500">{formatCurrencyFull(modEst.attorneyImpact.withoutAttorney)}</div>
+                <div class="text-xs text-gray-400">average settlement</div>
+              </div>
+              <div class="text-center p-4 bg-white border-2 border-green-300 rounded-xl">
+                <div class="text-sm text-gray-500 mb-1">With Attorney</div>
+                <div class="text-3xl font-bold text-green-700">{formatCurrencyFull(modEst.attorneyImpact.withAttorney)}</div>
+                <div class="text-xs text-green-600">{modEst.attorneyImpact.multiplier}x higher</div>
+              </div>
+            </div>
+            <p class="text-sm text-gray-600">
+              According to the Insurance Research Council (2025), injury victims with attorney representation
+              receive an average settlement of ${modEst.attorneyImpact.withAttorney.toLocaleString()} compared to
+              ${modEst.attorneyImpact.withoutAttorney.toLocaleString()} without. Most personal injury attorneys
+              work on contingency — you pay nothing unless you win.
+            </p>
+          </div>
+        )}
+
+        <!-- Calculator CTA -->
+        <div class="bg-brand-50 rounded-2xl p-6 text-center">
+          <h3 class="text-xl font-bold text-gray-900 mb-2">Get a Personalized Estimate</h3>
+          <p class="text-gray-600 mb-4">
+            Use our free settlement calculator with your specific injury details for a more accurate estimate.
+          </p>
+          <a href={`/settlement-calculator/?injury=${slug}&severity=moderate&state=CO`}
+            class="inline-flex items-center gap-2 px-8 py-3 bg-brand-600 text-white font-bold rounded-xl hover:bg-brand-700 transition-colors">
+            Open Settlement Calculator
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+          </a>
+        </div>
+
+        <CrashStoryCTA utmContent={`settlement-value-${slug}`} />
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="space-y-6">
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 sticky top-24">
+          <h3 class="font-bold text-gray-900 mb-4">{c.name} Settlement Quick Look</h3>
+
+          {mildEst && (
+            <div class="mb-3 p-3 bg-green-50 rounded-lg">
+              <div class="text-xs text-gray-500">Mild</div>
+              <div class="font-bold text-green-700">{formatCurrencyFull(mildEst.settlement.totalEstimateLow)} - {formatCurrencyFull(mildEst.settlement.totalEstimateHigh)}</div>
+            </div>
+          )}
+          {modEst && (
+            <div class="mb-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div class="text-xs text-gray-500">Moderate</div>
+              <div class="font-bold text-orange-700">{formatCurrencyFull(modEst.settlement.totalEstimateLow)} - {formatCurrencyFull(modEst.settlement.totalEstimateHigh)}</div>
+            </div>
+          )}
+          {severeEst && (
+            <div class="mb-3 p-3 bg-orange-50 rounded-lg">
+              <div class="text-xs text-gray-500">Severe</div>
+              <div class="font-bold text-red-700">{formatCurrencyFull(severeEst.settlement.totalEstimateLow)} - {formatCurrencyFull(severeEst.settlement.totalEstimateHigh)}</div>
+            </div>
+          )}
+          {catEst && (
+            <div class="mb-3 p-3 bg-red-50 rounded-lg">
+              <div class="text-xs text-gray-500">Catastrophic</div>
+              <div class="font-bold text-red-800">{formatCurrencyFull(catEst.settlement.totalEstimateLow)} - {formatCurrencyFull(catEst.settlement.totalEstimateHigh)}</div>
+            </div>
+          )}
+
+          <hr class="my-4" />
+
+          <h3 class="font-bold text-gray-900 mb-3">Related Pages</h3>
+          <ul class="text-sm space-y-2">
+            <li><a href={`/injury/${slug}/`} class="text-brand-600 hover:underline">{c.name} Overview & Costs</a></li>
+            <li><a href={`/conditions/${slug}/`} class="text-brand-600 hover:underline">Treatment Cost Breakdown</a></li>
+            <li><a href="/settlement-calculator/" class="text-brand-600 hover:underline">Settlement Calculator</a></li>
+          </ul>
+
+          <hr class="my-4" />
+
+          <div class="text-xs text-gray-400">
+            <p class="mb-1"><strong>Data Sources:</strong></p>
+            <ul class="space-y-0.5">
+              <li>CMS Medicare PFS CY2026</li>
+              <li>Insurance Research Council 2025</li>
+              <li>BLS Q1 2026</li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- FAQ Section -->
+    <section class="mt-16 max-w-4xl mx-auto">
+      <h2 class="text-2xl font-bold text-gray-900 mb-8">{c.name} Settlement FAQs</h2>
+      <div class="space-y-4">
+        {(faqSchema.mainEntity as any[]).map((faq: any) => (
+          <details class="bg-white rounded-xl border border-gray-200 p-5 group">
+            <summary class="font-bold text-gray-900 cursor-pointer list-none flex items-center justify-between">
+              {faq.name}
+              <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </summary>
+            <p class="mt-3 text-gray-600 text-sm">{faq.acceptedAnswer.text}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+
+    <!-- Disclaimer -->
+    <div class="mt-12 max-w-4xl mx-auto text-xs text-gray-400 border-t border-gray-200 pt-4">
+      <p>
+        <strong>Disclaimer:</strong> These settlement estimates are for informational purposes only and are based on statistical
+        averages using the multiplier method commonly used in the insurance industry. Every case is unique. Actual settlement
+        values depend on liability, insurance coverage, jurisdiction, attorney representation, and many other factors.
+        This is not legal advice. Consult a qualified personal injury attorney for case-specific guidance.
+      </p>
+    </div>
+  </div>
+</Base>

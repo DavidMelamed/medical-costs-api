@@ -1,0 +1,369 @@
+---
+import Base from '@/layouts/Base.astro';
+import CrashStoryCTA from '@/components/CrashStoryCTA.astro';
+import { getInjuries, getSettlementEstimate, formatCurrencyFull, STATES, type InjuryCategory } from '@/lib/api';
+
+const allInjuries = await getInjuries();
+const crashInjuries = allInjuries.filter(c => c.crashRelevance !== 'GENERAL');
+
+// Get query params for pre-populated results
+const injury = Astro.url.searchParams.get('injury') || '';
+const severity = Astro.url.searchParams.get('severity') || '';
+const state = Astro.url.searchParams.get('state') || 'CO';
+
+let estimate = null;
+let selectedInjury: InjuryCategory | null = null;
+if (injury && severity) {
+  estimate = await getSettlementEstimate(injury, severity, state);
+  selectedInjury = crashInjuries.find(c => c.slug === injury) || null;
+}
+
+const title = "Car Accident Settlement Calculator — Estimate Your Claim Value | MedicalCosts.info";
+const description = "Free car accident settlement calculator. Estimate your injury claim value based on medical costs, pain and suffering multipliers, and lost wages. Powered by CMS Medicare data.";
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How is a car accident settlement calculated?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Car accident settlements are typically calculated using the multiplier method: Total Settlement = (Medical Bills + Lost Wages) x Severity Multiplier. The multiplier ranges from 1.5x for minor injuries to 7x or more for catastrophic injuries. This calculator uses real medical cost data from CMS Medicare fee schedules to estimate the medical bill component."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the average car accident settlement amount?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Average car accident settlements vary widely by injury type. Whiplash averages $18,950, concussions average $25,000, and traumatic brain injuries can settle for $500,000 or more. With attorney representation, the average settlement is $77,600 compared to $17,600 without an attorney (Insurance Research Council 2025)."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the pain and suffering multiplier?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The pain and suffering multiplier is a number (typically 1.5 to 7) that insurance companies multiply your economic damages by to calculate non-economic damages. Mild injuries use a 1.5-2x multiplier, moderate injuries 2-3x, severe injuries 3-5x, and catastrophic injuries 5-7x or higher."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Should I get an attorney for my car accident claim?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "According to the Insurance Research Council (2025), claimants with attorney representation receive an average of $77,600 vs $17,600 without an attorney — 4.4x more. Most personal injury attorneys work on contingency (no upfront cost), making legal representation financially accessible for most injury victims."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How long does it take to settle a car accident claim?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Most car accident claims settle within 6-18 months. Minor injury claims may settle in 3-6 months. Claims involving surgery, permanent injuries, or disputed liability may take 1-3 years. It's generally advisable to reach maximum medical improvement (MMI) before settling to ensure all medical costs are accounted for."
+      }
+    }
+  ]
+};
+---
+
+<Base title={title} description={description} canonical="/settlement-calculator/" schema={faqSchema}>
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+      <nav class="text-sm text-blue-200 mb-6">
+        <a href="/" class="hover:text-white">Home</a>
+        <span class="mx-2">/</span>
+        <span class="text-white font-medium">Settlement Calculator</span>
+      </nav>
+      <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-4">
+        Car Accident Settlement Calculator
+      </h1>
+      <p class="text-xl text-blue-100 max-w-3xl">
+        Estimate your injury claim value based on real medical cost data, insurance industry
+        settlement multipliers, and lost wage calculations. Free and instant.
+      </p>
+    </div>
+  </section>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="grid lg:grid-cols-3 gap-12">
+      <!-- Calculator Form -->
+      <div class="lg:col-span-2">
+        <form method="GET" action="/settlement-calculator/" class="space-y-8">
+          <!-- Step 1: Injury Type -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-6">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-brand-600 text-white text-sm font-bold flex items-center justify-center">1</span>
+              <h2 class="text-xl font-bold text-gray-900">Select Your Injury Type</h2>
+            </div>
+            <select
+              name="injury"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              required
+            >
+              <option value="">Choose an injury type...</option>
+              {crashInjuries.map(c => (
+                <option value={c.slug} selected={c.slug === injury}>
+                  {c.name} {c.bodyRegion ? `(${c.bodyRegion})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Step 2: Severity -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-6">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-brand-600 text-white text-sm font-bold flex items-center justify-center">2</span>
+              <h2 class="text-xl font-bold text-gray-900">Select Severity</h2>
+            </div>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { value: 'mild', label: 'Mild', desc: 'Full recovery expected, conservative treatment', color: 'border-green-300 bg-green-50' },
+                { value: 'moderate', label: 'Moderate', desc: 'Extended treatment, temporary disability', color: 'border-yellow-300 bg-yellow-50' },
+                { value: 'severe', label: 'Severe', desc: 'Surgery required, permanent impairment possible', color: 'border-orange-300 bg-orange-50' },
+                { value: 'catastrophic', label: 'Catastrophic', desc: 'Permanent disability, lifetime care needed', color: 'border-red-300 bg-red-50' },
+              ].map(opt => (
+                <label class={`block border-2 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${severity === opt.value ? opt.color + ' ring-2 ring-brand-500' : 'border-gray-200 bg-white'}`}>
+                  <input type="radio" name="severity" value={opt.value} class="sr-only" checked={severity === opt.value} required />
+                  <div class="font-bold text-gray-900 mb-1">{opt.label}</div>
+                  <div class="text-xs text-gray-500">{opt.desc}</div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <!-- Step 3: State -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-6">
+            <div class="flex items-center gap-3 mb-4">
+              <span class="w-8 h-8 rounded-full bg-brand-600 text-white text-sm font-bold flex items-center justify-center">3</span>
+              <h2 class="text-xl font-bold text-gray-900">Select State</h2>
+            </div>
+            <select
+              name="state"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+            >
+              {STATES.map(s => (
+                <option value={s.code} selected={s.code === state}>{s.name} ({s.code})</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full px-8 py-4 bg-brand-600 text-white text-lg font-bold rounded-xl hover:bg-brand-700 transition-colors shadow-lg"
+          >
+            Calculate Settlement Estimate
+          </button>
+        </form>
+
+        <!-- Results -->
+        {estimate && (
+          <div id="results" class="mt-12 space-y-8">
+            <h2 class="text-2xl font-bold text-gray-900">
+              Settlement Estimate: {estimate.injury.name} ({severity})
+            </h2>
+
+            <!-- Total Range -->
+            <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8 text-center">
+              <div class="text-sm text-gray-500 mb-2">Estimated Total Settlement Range</div>
+              <div class="text-4xl md:text-5xl font-extrabold text-green-700">
+                {formatCurrencyFull(estimate.settlement.totalEstimateLow)} — {formatCurrencyFull(estimate.settlement.totalEstimateHigh)}
+              </div>
+              <div class="text-sm text-gray-500 mt-2">
+                Based on {estimate.settlement.multiplierLow}x — {estimate.settlement.multiplierHigh}x multiplier
+              </div>
+            </div>
+
+            <!-- Breakdown -->
+            <div class="bg-white rounded-2xl border border-gray-200 p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-6">Settlement Breakdown</h3>
+
+              <div class="space-y-6">
+                <!-- Medical Bills -->
+                <div class="flex items-center justify-between p-4 bg-blue-50 rounded-xl">
+                  <div>
+                    <div class="font-bold text-gray-900">Medical Bills</div>
+                    <div class="text-sm text-gray-500">Treatment costs based on CMS Medicare data</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xl font-bold text-blue-700">
+                      {formatCurrencyFull(estimate.medicalCosts.low)} — {formatCurrencyFull(estimate.medicalCosts.high)}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Pain & Suffering -->
+                <div class="flex items-center justify-between p-4 bg-purple-50 rounded-xl">
+                  <div>
+                    <div class="font-bold text-gray-900">Pain & Suffering</div>
+                    <div class="text-sm text-gray-500">{estimate.settlement.multiplierLow}x — {estimate.settlement.multiplierHigh}x multiplier applied</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xl font-bold text-purple-700">
+                      {formatCurrencyFull(estimate.settlement.painAndSufferingLow)} — {formatCurrencyFull(estimate.settlement.painAndSufferingHigh)}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Lost Wages -->
+                <div class="flex items-center justify-between p-4 bg-amber-50 rounded-xl">
+                  <div>
+                    <div class="font-bold text-gray-900">Lost Wages</div>
+                    <div class="text-sm text-gray-500">{estimate.lostWages.recoveryWeeks} weeks recovery at ${estimate.lostWages.weeklyWage}/week</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xl font-bold text-amber-700">
+                      {formatCurrencyFull(estimate.lostWages.low)} — {formatCurrencyFull(estimate.lostWages.high)}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Formula -->
+                <div class="border-t border-gray-200 pt-4">
+                  <div class="text-sm text-gray-500 font-mono text-center">
+                    Medical ({formatCurrencyFull(estimate.medicalCosts.low)}-{formatCurrencyFull(estimate.medicalCosts.high)})
+                    + Pain & Suffering ({formatCurrencyFull(estimate.settlement.painAndSufferingLow)}-{formatCurrencyFull(estimate.settlement.painAndSufferingHigh)})
+                    + Lost Wages ({formatCurrencyFull(estimate.lostWages.low)}-{formatCurrencyFull(estimate.lostWages.high)})
+                    = <strong class="text-green-700">{formatCurrencyFull(estimate.settlement.totalEstimateLow)} — {formatCurrencyFull(estimate.settlement.totalEstimateHigh)}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Attorney Impact -->
+            <div class="bg-white rounded-2xl border border-gray-200 p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-4">Impact of Attorney Representation</h3>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div class="p-4 bg-gray-50 rounded-xl text-center">
+                  <div class="text-sm text-gray-500 mb-1">Without Attorney</div>
+                  <div class="text-2xl font-bold text-gray-600">{formatCurrencyFull(estimate.attorneyImpact.withoutAttorney)}</div>
+                  <div class="text-xs text-gray-400">average settlement</div>
+                </div>
+                <div class="p-4 bg-green-50 border-2 border-green-200 rounded-xl text-center">
+                  <div class="text-sm text-gray-500 mb-1">With Attorney</div>
+                  <div class="text-2xl font-bold text-green-700">{formatCurrencyFull(estimate.attorneyImpact.withAttorney)}</div>
+                  <div class="text-xs text-green-600">{estimate.attorneyImpact.multiplier}x higher</div>
+                </div>
+              </div>
+              <p class="text-xs text-gray-400 mt-3">Source: {estimate.attorneyImpact.source}</p>
+            </div>
+
+            <!-- Methodology -->
+            <div class="bg-gray-50 rounded-2xl p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-3">How This Estimate Was Calculated</h3>
+              <dl class="space-y-2 text-sm">
+                <div>
+                  <dt class="font-semibold text-gray-700">Formula</dt>
+                  <dd class="text-gray-600">{estimate.methodology.formula}</dd>
+                </div>
+                <div>
+                  <dt class="font-semibold text-gray-700">Medical Cost Data</dt>
+                  <dd class="text-gray-600">{estimate.methodology.medicalCostBasis}</dd>
+                </div>
+                <div>
+                  <dt class="font-semibold text-gray-700">Lost Wage Basis</dt>
+                  <dd class="text-gray-600">{estimate.methodology.lostWageBasis}</dd>
+                </div>
+                <div>
+                  <dt class="font-semibold text-gray-700">Multiplier Method</dt>
+                  <dd class="text-gray-600">{estimate.methodology.multiplierMethod}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- View injury details -->
+            <div class="flex flex-wrap gap-3">
+              <a href={`/conditions/${estimate.injury.slug}/`}
+                class="px-5 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:border-brand-500 transition-colors">
+                View {estimate.injury.name} Treatment Costs
+              </a>
+              <a href={`/injury/${estimate.injury.slug}/settlement-value/`}
+                class="px-5 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:border-brand-500 transition-colors">
+                {estimate.injury.name} Settlement Guide
+              </a>
+            </div>
+
+            <CrashStoryCTA utmContent={`calculator-${estimate.injury.slug}`} />
+
+            <!-- Disclaimer -->
+            <div class="text-xs text-gray-400 border-t border-gray-200 pt-4">
+              <p><strong>Disclaimer:</strong> {estimate.disclaimer}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="space-y-6">
+        <div class="bg-white rounded-2xl border border-gray-200 p-6 sticky top-24">
+          <h3 class="font-bold text-gray-900 mb-4">How Settlement Multipliers Work</h3>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between items-center p-2 bg-green-50 rounded-lg">
+              <span class="font-medium text-gray-700">Mild</span>
+              <span class="font-bold text-green-700">1.5x - 2.0x</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-yellow-50 rounded-lg">
+              <span class="font-medium text-gray-700">Moderate</span>
+              <span class="font-bold text-yellow-700">2.0x - 3.0x</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-orange-50 rounded-lg">
+              <span class="font-medium text-gray-700">Severe</span>
+              <span class="font-bold text-orange-700">3.0x - 5.0x</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-red-50 rounded-lg">
+              <span class="font-medium text-gray-700">Catastrophic</span>
+              <span class="font-bold text-red-700">5.0x - 7.0x</span>
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 mt-4">
+            Multipliers are applied to economic damages (medical bills + lost wages) to estimate
+            pain and suffering. These ranges reflect insurance industry standards.
+          </p>
+
+          <hr class="my-6" />
+
+          <h3 class="font-bold text-gray-900 mb-3">Factors That Increase Your Settlement</h3>
+          <ul class="text-sm text-gray-600 space-y-2">
+            <li>Clear liability (other driver at fault)</li>
+            <li>Thorough medical documentation</li>
+            <li>Objective diagnostic evidence (MRI, CT)</li>
+            <li>Permanent impairment documented</li>
+            <li>Consistent treatment (no gaps)</li>
+            <li>Attorney representation (4.4x higher avg)</li>
+          </ul>
+
+          <hr class="my-6" />
+
+          <h3 class="font-bold text-gray-900 mb-3">Crash-Related Injuries</h3>
+          <ul class="text-sm space-y-1">
+            {crashInjuries.slice(0, 8).map(c => (
+              <li>
+                <a href={`/injury/${c.slug}/`} class="text-brand-600 hover:underline">{c.name}</a>
+              </li>
+            ))}
+          </ul>
+          <a href="/conditions/" class="text-sm text-brand-600 hover:underline mt-2 inline-block">View all conditions</a>
+        </div>
+      </aside>
+    </div>
+
+    <!-- FAQ Section -->
+    <section class="mt-16 max-w-4xl mx-auto">
+      <h2 class="text-2xl font-bold text-gray-900 mb-8">Frequently Asked Questions</h2>
+      <div class="space-y-6">
+        {(faqSchema.mainEntity as any[]).map((faq: any) => (
+          <details class="bg-white rounded-xl border border-gray-200 p-5 group" open>
+            <summary class="font-bold text-gray-900 cursor-pointer list-none flex items-center justify-between">
+              {faq.name}
+              <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </summary>
+            <p class="mt-3 text-gray-600 text-sm">{faq.acceptedAnswer.text}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  </div>
+</Base>

@@ -82,10 +82,23 @@ export default {
       if (path === "/api/statistics") return handleStatistics(env, cors);
       if (path === "/api/categories") return handleCategories(env, cors);
       if (path === "/api/drg") return handleDrgList(url, env, cors);
+      if (path === "/api/settlement-estimate") return handleSettlementEstimate(url, env, cors);
+      if (path === "/api/metrics") return handleMetrics(env, cors);
+      if (path === "/api/metrics/facts") return handleMetricsFacts(env, cors);
+      if (path === "/api/search") return handleUnifiedSearch(url, env, cors);
 
       // Parameterized routes
+      const graphMatch = path.match(/^\/api\/graph\/([^/]+)\/(.+)$/);
+      if (graphMatch) return handleGraph(decodeURIComponent(graphMatch[1]), decodeURIComponent(graphMatch[2]), url, env, cors);
+
       const drgMatch = path.match(/^\/api\/drg\/([^/]+)$/);
       if (drgMatch) return handleDrgDetail(decodeURIComponent(drgMatch[1]), env, cors);
+
+      const procBySlugMatch = path.match(/^\/api\/procedures\/by-slug\/([^/]+)$/);
+      if (procBySlugMatch) return handleProcedureBySlug(decodeURIComponent(procBySlugMatch[1]), env, cors);
+
+      const relatedMatch = path.match(/^\/api\/related\/([^/]+)$/);
+      if (relatedMatch) return handleRelatedProcedures(decodeURIComponent(relatedMatch[1]), env, cors);
 
       const procMatch = path.match(/^\/api\/procedures\/([^/]+)$/);
       if (procMatch) return handleProcedureDetail(decodeURIComponent(procMatch[1]), env, cors);
@@ -127,6 +140,13 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/categories",
         "GET /api/drg",
         "GET /api/drg/:code",
+        "GET /api/graph/:type/:id",
+        "GET /api/settlement-estimate",
+        "GET /api/metrics",
+        "GET /api/metrics/facts",
+        "GET /api/procedures/by-slug/:slug",
+        "GET /api/related/:code",
+        "GET /api/search?q=term",
       ],
     },
     cors,
@@ -805,6 +825,495 @@ async function handleDrgDetail(code: string, env: Env, cors: Record<string, stri
       cmsInpatient: cmsInpatient || null,
       nySparcs: sparcsData,
       disclaimer: DISCLAIMER,
+    },
+    cors,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settlement multiplier data (from insurance research)
+// ---------------------------------------------------------------------------
+
+const INJURY_MULTIPLIERS: Record<string, {
+  mild: [number, number];
+  moderate: [number, number];
+  severe: [number, number];
+  catastrophic: [number, number];
+  recoveryWeeks: { mild: number; moderate: number; severe: number; catastrophic: number };
+}> = {
+  'whiplash-cervical-strain': {
+    mild: [1.5, 2.0], moderate: [2.5, 3.5], severe: [3.5, 5.0], catastrophic: [5.0, 7.0],
+    recoveryWeeks: { mild: 6, moderate: 16, severe: 52, catastrophic: 104 }
+  },
+  'traumatic-brain-injury': {
+    mild: [2.0, 3.0], moderate: [3.5, 5.0], severe: [5.0, 7.0], catastrophic: [6.0, 8.0],
+    recoveryWeeks: { mild: 8, moderate: 26, severe: 104, catastrophic: 260 }
+  },
+  'lumbar-thoracic-spine-injury': {
+    mild: [1.5, 2.5], moderate: [2.5, 4.0], severe: [3.5, 5.0], catastrophic: [5.0, 7.0],
+    recoveryWeeks: { mild: 8, moderate: 24, severe: 52, catastrophic: 104 }
+  },
+  'spinal-cord-injury': {
+    mild: [3.0, 4.0], moderate: [4.0, 5.5], severe: [5.0, 7.0], catastrophic: [6.0, 8.0],
+    recoveryWeeks: { mild: 26, moderate: 52, severe: 260, catastrophic: 520 }
+  },
+  'extremity-fractures': {
+    mild: [1.5, 2.5], moderate: [2.5, 3.5], severe: [3.5, 5.0], catastrophic: [5.0, 7.0],
+    recoveryWeeks: { mild: 8, moderate: 16, severe: 40, catastrophic: 78 }
+  },
+  'rib-chest-fractures': {
+    mild: [1.5, 2.0], moderate: [2.0, 3.0], severe: [3.0, 4.5], catastrophic: [4.5, 6.0],
+    recoveryWeeks: { mild: 6, moderate: 12, severe: 26, catastrophic: 52 }
+  },
+  'internal-organ-injuries': {
+    mild: [2.5, 3.5], moderate: [3.5, 5.0], severe: [4.5, 6.0], catastrophic: [5.5, 7.0],
+    recoveryWeeks: { mild: 8, moderate: 20, severe: 52, catastrophic: 104 }
+  },
+  'soft-tissue-contusions': {
+    mild: [1.5, 2.0], moderate: [2.0, 2.5], severe: [2.5, 3.5], catastrophic: [3.5, 5.0],
+    recoveryWeeks: { mild: 2, moderate: 6, severe: 16, catastrophic: 30 }
+  },
+  'knee-ligament-tears': {
+    mild: [2.0, 2.5], moderate: [2.5, 3.5], severe: [3.5, 5.0], catastrophic: [5.0, 7.0],
+    recoveryWeeks: { mild: 8, moderate: 26, severe: 52, catastrophic: 78 }
+  },
+  'shoulder-injuries': {
+    mild: [1.5, 2.5], moderate: [2.5, 3.5], severe: [3.0, 4.5], catastrophic: [4.5, 6.0],
+    recoveryWeeks: { mild: 6, moderate: 16, severe: 40, catastrophic: 60 }
+  },
+  'facial-jaw-fractures': {
+    mild: [2.0, 3.0], moderate: [3.0, 4.0], severe: [4.0, 5.5], catastrophic: [5.5, 7.0],
+    recoveryWeeks: { mild: 6, moderate: 16, severe: 40, catastrophic: 60 }
+  },
+  'burns': {
+    mild: [2.0, 3.0], moderate: [3.0, 4.5], severe: [4.5, 7.0], catastrophic: [6.0, 8.0],
+    recoveryWeeks: { mild: 4, moderate: 16, severe: 52, catastrophic: 104 }
+  },
+  'pedestrian-impact-injuries': {
+    mild: [2.0, 3.0], moderate: [3.0, 4.5], severe: [4.5, 6.5], catastrophic: [6.0, 8.0],
+    recoveryWeeks: { mild: 8, moderate: 24, severe: 52, catastrophic: 104 }
+  },
+  'bicycle-crash-injuries': {
+    mild: [2.0, 3.0], moderate: [3.0, 4.0], severe: [4.0, 6.0], catastrophic: [5.5, 7.5],
+    recoveryWeeks: { mild: 6, moderate: 20, severe: 52, catastrophic: 78 }
+  },
+};
+
+// Default multipliers for injuries not in the map
+const DEFAULT_MULTIPLIERS = {
+  mild: [1.5, 2.0] as [number, number],
+  moderate: [2.0, 3.0] as [number, number],
+  severe: [3.0, 5.0] as [number, number],
+  catastrophic: [5.0, 7.0] as [number, number],
+  recoveryWeeks: { mild: 6, moderate: 16, severe: 40, catastrophic: 78 },
+};
+
+// US Bureau of Labor Statistics, Q1 2026
+const MEDIAN_WEEKLY_WAGE = 1_200; // ~$62,400/year
+
+// ---------------------------------------------------------------------------
+// GET /api/settlement-estimate
+// ---------------------------------------------------------------------------
+
+async function handleSettlementEstimate(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const injurySlug = url.searchParams.get("injury");
+  const severity = url.searchParams.get("severity") || "moderate";
+  const state = url.searchParams.get("state") || "CO";
+
+  if (!injurySlug) {
+    return error("injury parameter is required (slug from injury_categories)", 400, cors);
+  }
+
+  const validSeverities = ["mild", "moderate", "severe", "catastrophic"];
+  if (!validSeverities.includes(severity)) {
+    return error(`Invalid severity. Must be one of: ${validSeverities.join(", ")}`, 400, cors);
+  }
+
+  // Look up injury category
+  const injury = await env.DB.prepare(
+    `SELECT
+       id, name, slug, description, body_region AS bodyRegion,
+       crash_relevance AS crashRelevance,
+       mild_cost_low AS mildCostLow, mild_cost_high AS mildCostHigh,
+       moderate_cost_low AS moderateCostLow, moderate_cost_high AS moderateCostHigh,
+       severe_cost_low AS severeCostLow, severe_cost_high AS severeCostHigh,
+       lifetime_cost_low AS lifetimeCostLow, lifetime_cost_high AS lifetimeCostHigh
+     FROM injury_categories WHERE slug = ?1`,
+  ).bind(injurySlug).first();
+
+  if (!injury) return error("Injury category not found", 404, cors);
+
+  const injuryRec = injury as Record<string, unknown>;
+
+  // Get medical costs for this severity
+  let medicalCostLow: number;
+  let medicalCostHigh: number;
+  if (severity === "mild") {
+    medicalCostLow = (injuryRec.mildCostLow as number) || 0;
+    medicalCostHigh = (injuryRec.mildCostHigh as number) || 0;
+  } else if (severity === "moderate") {
+    medicalCostLow = (injuryRec.moderateCostLow as number) || 0;
+    medicalCostHigh = (injuryRec.moderateCostHigh as number) || 0;
+  } else if (severity === "severe") {
+    medicalCostLow = (injuryRec.severeCostLow as number) || 0;
+    medicalCostHigh = (injuryRec.severeCostHigh as number) || 0;
+  } else {
+    // catastrophic = lifetime
+    medicalCostLow = (injuryRec.lifetimeCostLow as number) || 0;
+    medicalCostHigh = (injuryRec.lifetimeCostHigh as number) || 0;
+  }
+
+  // Get multipliers for this injury
+  const slug = injuryRec.slug as string;
+  const multipliers = INJURY_MULTIPLIERS[slug] || DEFAULT_MULTIPLIERS;
+  const severityKey = severity as keyof typeof multipliers;
+  const [multLow, multHigh] = (multipliers[severityKey] as [number, number]) || DEFAULT_MULTIPLIERS[severityKey as keyof typeof DEFAULT_MULTIPLIERS];
+  const recoveryWeeks = multipliers.recoveryWeeks[severityKey as keyof typeof multipliers.recoveryWeeks] || DEFAULT_MULTIPLIERS.recoveryWeeks[severityKey as keyof typeof DEFAULT_MULTIPLIERS.recoveryWeeks];
+
+  // Lost wages: recovery weeks x weekly wage x 60% work impact
+  const lostWagesLow = Math.round(recoveryWeeks * MEDIAN_WEEKLY_WAGE * 0.6);
+  const lostWagesHigh = Math.round(recoveryWeeks * MEDIAN_WEEKLY_WAGE * 0.85);
+
+  // Average medical cost for settlement calculation
+  const medicalMid = (medicalCostLow + medicalCostHigh) / 2;
+
+  // Economic damages = medical + lost wages
+  const economicLow = medicalCostLow + lostWagesLow;
+  const economicHigh = medicalCostHigh + lostWagesHigh;
+
+  // Pain and suffering = (economic damages) x (multiplier - 1)
+  // Total settlement = economic damages x multiplier
+  const painSufferingLow = Math.round(economicLow * (multLow - 1));
+  const painSufferingHigh = Math.round(economicHigh * (multHigh - 1));
+
+  const totalSettlementLow = Math.round(economicLow * multLow);
+  const totalSettlementHigh = Math.round(economicHigh * multHigh);
+
+  // Get procedure-level cost breakdown by phase
+  const { results: procedures } = await env.DB.prepare(
+    `SELECT
+       mp.code, mp.description, mp.category,
+       mp.national_facility_rate AS medicareRate,
+       ipm.phase, ipm.typical_qty AS typicalQty, ipm.is_common AS isCommon,
+       g.facility_rate AS geoFacilityRate
+     FROM injury_procedure_mappings ipm
+     JOIN medical_procedures mp ON mp.id = ipm.procedure_id
+     LEFT JOIN medical_cost_geographic g ON g.procedure_id = mp.id AND g.state_code = ?2
+     WHERE ipm.injury_id = ?1
+     ORDER BY ipm.phase, mp.code`,
+  ).bind(injuryRec.id, state).all();
+
+  // Group costs by phase
+  const phaseCosts: Record<string, number> = {};
+  for (const p of procedures) {
+    const rec = p as Record<string, unknown>;
+    const phase = (rec.phase as string) || "ACUTE";
+    const rate = (rec.geoFacilityRate as number) || (rec.medicareRate as number) || 0;
+    const qty = (rec.typicalQty as number) || 1;
+    const cost = rate * qty * 2.0; // Use 2x Medicare as typical commercial rate
+    phaseCosts[phase] = (phaseCosts[phase] || 0) + cost;
+  }
+
+  return success(
+    {
+      injury: {
+        name: injuryRec.name,
+        slug: injuryRec.slug,
+        bodyRegion: injuryRec.bodyRegion,
+        crashRelevance: injuryRec.crashRelevance,
+        description: injuryRec.description,
+      },
+      severity,
+      state,
+      medicalCosts: {
+        low: medicalCostLow,
+        high: medicalCostHigh,
+        byPhase: phaseCosts,
+        source: "MedicalCosts.info — CMS Medicare PFS 2026 rates",
+        note: "Commercial insurance rates are typically 1.5-2.5x Medicare",
+      },
+      lostWages: {
+        recoveryWeeks,
+        weeklyWage: MEDIAN_WEEKLY_WAGE,
+        workImpactFactor: "60-85%",
+        low: lostWagesLow,
+        high: lostWagesHigh,
+      },
+      settlement: {
+        economicDamagesLow: economicLow,
+        economicDamagesHigh: economicHigh,
+        multiplierLow: multLow,
+        multiplierHigh: multHigh,
+        painAndSufferingLow: painSufferingLow,
+        painAndSufferingHigh: painSufferingHigh,
+        totalEstimateLow: totalSettlementLow,
+        totalEstimateHigh: totalSettlementHigh,
+      },
+      methodology: {
+        formula: "Total Settlement = (Medical Bills + Lost Wages) x Severity Multiplier",
+        multiplierMethod: "Based on insurance industry standard multiplier method used by adjusters and attorneys",
+        medicalCostBasis: "CMS Medicare Physician Fee Schedule 2026, adjusted to commercial rates (1.5-2.5x)",
+        lostWageBasis: `US Bureau of Labor Statistics median weekly wage ($${MEDIAN_WEEKLY_WAGE}/week) x recovery period x work impact factor`,
+        sources: [
+          "CMS Medicare Physician Fee Schedule CY2026",
+          "Insurance Research Council 2025",
+          "US Bureau of Labor Statistics Q1 2026",
+        ],
+      },
+      attorneyImpact: {
+        withoutAttorney: 17600,
+        withAttorney: 77600,
+        multiplier: 4.4,
+        source: "Insurance Research Council 2025",
+      },
+      disclaimer: "These are estimates only based on statistical averages and the multiplier method commonly used in the insurance industry. " +
+        "Every case is unique. Actual settlement values depend on liability, insurance coverage, jurisdiction, " +
+        "attorney representation, and many other factors. This is not legal advice. Consult a qualified attorney.",
+    },
+    cors,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/graph/:type/:id — Knowledge graph relationships for an entity
+// ---------------------------------------------------------------------------
+
+async function handleGraph(entityType: string, entityId: string, url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const validTypes = ["procedure", "condition", "body_system", "drug", "category"];
+  if (!validTypes.includes(entityType)) {
+    return error(`Invalid entity type. Must be one of: ${validTypes.join(", ")}`, 400, cors);
+  }
+
+  const relationship = url.searchParams.get("relationship");
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
+
+  // Get outgoing relationships (this entity as source)
+  const outConditions = ["source_type = ?1", "source_id = ?2"];
+  const outParams: unknown[] = [entityType, entityId];
+  if (relationship) {
+    outConditions.push(`relationship = ?3`);
+    outParams.push(relationship);
+  }
+
+  const { results: outgoing } = await env.DB.prepare(
+    `SELECT id, relationship, target_type AS targetType, target_id AS targetId, weight
+     FROM entity_relationships
+     WHERE ${outConditions.join(" AND ")}
+     ORDER BY weight DESC
+     LIMIT ?${outParams.length + 1}`,
+  ).bind(...outParams, limit).all();
+
+  // Get incoming relationships (this entity as target)
+  const inConditions = ["target_type = ?1", "target_id = ?2"];
+  const inParams: unknown[] = [entityType, entityId];
+  if (relationship) {
+    inConditions.push(`relationship = ?3`);
+    inParams.push(relationship);
+  }
+
+  const { results: incoming } = await env.DB.prepare(
+    `SELECT id, relationship, source_type AS sourceType, source_id AS sourceId, weight
+     FROM entity_relationships
+     WHERE ${inConditions.join(" AND ")}
+     ORDER BY weight DESC
+     LIMIT ?${inParams.length + 1}`,
+  ).bind(...inParams, limit).all();
+
+  // Group by relationship type
+  const grouped: Record<string, unknown[]> = {};
+  for (const rel of outgoing) {
+    const r = rel as Record<string, unknown>;
+    const key = r.relationship as string;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push({ type: r.targetType, id: r.targetId, weight: r.weight, direction: "outgoing" });
+  }
+  for (const rel of incoming) {
+    const r = rel as Record<string, unknown>;
+    const key = r.relationship as string;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push({ type: r.sourceType, id: r.sourceId, weight: r.weight, direction: "incoming" });
+  }
+
+  return success(
+    {
+      entity: { type: entityType, id: entityId },
+      relationships: grouped,
+      totalOutgoing: outgoing.length,
+      totalIncoming: incoming.length,
+    },
+    cors,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/metrics — Aggregate metrics and interesting facts
+// ---------------------------------------------------------------------------
+
+async function handleMetrics(env: Env, cors: Record<string, string>): Promise<Response> {
+  const [allMetrics, facts] = await Promise.all([
+    env.DB.prepare(
+      `SELECT metric_type, metric_key, metric_value, label, detail
+       FROM aggregate_metrics
+       ORDER BY metric_type, metric_value DESC`,
+    ).all(),
+    env.DB.prepare(
+      `SELECT metric_key, metric_value, label, detail
+       FROM aggregate_metrics
+       WHERE metric_type = 'interesting_fact'
+       ORDER BY metric_key`,
+    ).all(),
+  ]);
+
+  // Group metrics by type
+  const grouped: Record<string, unknown[]> = {};
+  for (const row of allMetrics.results) {
+    const r = row as Record<string, unknown>;
+    const type = r.metric_type as string;
+    if (!grouped[type]) grouped[type] = [];
+    grouped[type].push({
+      key: r.metric_key,
+      value: r.metric_value,
+      label: r.label,
+      detail: r.detail,
+    });
+  }
+
+  return success({ metrics: grouped, facts: facts.results }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/metrics/facts — Just the interesting facts
+// ---------------------------------------------------------------------------
+
+async function handleMetricsFacts(env: Env, cors: Record<string, string>): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT metric_key AS key, metric_value AS value, label, detail
+     FROM aggregate_metrics
+     WHERE metric_type = 'interesting_fact'
+     ORDER BY metric_key`,
+  ).all();
+
+  return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/procedures/by-slug/:slug — Lookup by human-readable slug
+// ---------------------------------------------------------------------------
+
+async function handleProcedureBySlug(slug: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const slugRow = await env.DB.prepare(
+    `SELECT code FROM procedure_slugs WHERE slug = ?1`,
+  ).bind(slug).first<{ code: string }>();
+
+  if (!slugRow) return error("Procedure slug not found", 404, cors);
+
+  // Delegate to the existing detail handler
+  return handleProcedureDetail(slugRow.code, env, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/related/:code — Related procedures (same category, body system, cost range)
+// ---------------------------------------------------------------------------
+
+async function handleRelatedProcedures(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  const proc = await env.DB.prepare(
+    `SELECT id, code, category, body_system, national_facility_rate
+     FROM medical_procedures WHERE code = ?1`,
+  ).bind(code).first();
+
+  if (!proc) return error("Procedure not found", 404, cors);
+
+  const p = proc as Record<string, unknown>;
+  const rate = (p.national_facility_rate as number) || 0;
+  const rateLow = rate * 0.5;
+  const rateHigh = rate * 2.0;
+
+  // Find related by same category OR same body system, within 0.5x-2x cost range, excluding self
+  const { results } = await env.DB.prepare(
+    `SELECT
+       mp.code, mp.description, mp.category, mp.body_system AS bodySystem,
+       mp.national_facility_rate AS nationalFacilityRate,
+       ps.slug,
+       CASE
+         WHEN mp.category = ?2 AND mp.body_system = ?3 THEN 3
+         WHEN mp.category = ?2 THEN 2
+         WHEN mp.body_system = ?3 THEN 1
+         ELSE 0
+       END AS relevance
+     FROM medical_procedures mp
+     LEFT JOIN procedure_slugs ps ON ps.code = mp.code
+     WHERE mp.code != ?1
+       AND (mp.category = ?2 OR mp.body_system = ?3)
+       AND mp.national_facility_rate BETWEEN ?4 AND ?5
+       AND mp.national_facility_rate IS NOT NULL
+     ORDER BY relevance DESC, ABS(mp.national_facility_rate - ?6) ASC
+     LIMIT 10`,
+  ).bind(code, p.category, p.body_system, rateLow, rateHigh, rate).all();
+
+  return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/search?q=term — Unified search across procedures, conditions, drugs
+// ---------------------------------------------------------------------------
+
+async function handleUnifiedSearch(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const q = url.searchParams.get("q");
+  if (!q || q.length < 2) return error("Query parameter 'q' is required (min 2 chars)", 400, cors);
+
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 1), 50);
+  const searchTerm = `%${q}%`;
+
+  // Search procedures (non-drug)
+  const proceduresPromise = env.DB.prepare(
+    `SELECT mp.code, mp.description, mp.category, mp.body_system AS bodySystem,
+            mp.national_facility_rate AS nationalFacilityRate, ps.slug,
+            'procedure' AS resultType
+     FROM medical_procedures mp
+     LEFT JOIN procedure_slugs ps ON ps.code = mp.code
+     WHERE (mp.code LIKE ?1 OR mp.description LIKE ?1)
+       AND mp.category NOT LIKE 'Prescription Drug%'
+     ORDER BY mp.national_facility_rate DESC
+     LIMIT ?2`,
+  ).bind(searchTerm, limit).all();
+
+  // Search drugs
+  const drugsPromise = env.DB.prepare(
+    `SELECT mp.code, mp.description, mp.category, mp.body_system AS bodySystem,
+            mp.national_facility_rate AS nationalFacilityRate, ps.slug,
+            'drug' AS resultType
+     FROM medical_procedures mp
+     LEFT JOIN procedure_slugs ps ON ps.code = mp.code
+     WHERE (mp.code LIKE ?1 OR mp.description LIKE ?1)
+       AND mp.category LIKE 'Prescription Drug%'
+     ORDER BY mp.national_facility_rate DESC
+     LIMIT ?2`,
+  ).bind(searchTerm, limit).all();
+
+  // Search conditions (injury categories)
+  const conditionsPromise = env.DB.prepare(
+    `SELECT name, slug, description, body_region AS bodyRegion,
+            crash_relevance AS crashRelevance,
+            moderate_cost_low AS moderateCostLow, moderate_cost_high AS moderateCostHigh,
+            'condition' AS resultType
+     FROM injury_categories
+     WHERE name LIKE ?1 OR description LIKE ?1
+     ORDER BY name
+     LIMIT ?2`,
+  ).bind(searchTerm, limit).all();
+
+  const [procedures, drugs, conditions] = await Promise.all([
+    proceduresPromise,
+    drugsPromise,
+    conditionsPromise,
+  ]);
+
+  return success(
+    {
+      procedures: procedures.results,
+      drugs: drugs.results,
+      conditions: conditions.results,
+      query: q,
     },
     cors,
   );
