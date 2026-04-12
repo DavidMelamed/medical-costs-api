@@ -1,0 +1,343 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getProcedure, formatCurrencyFull, slugify, STATES } from '@/lib/api';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/procedures/');
+
+// The slug could be a CPT code or a procedure-name slug
+// Try as CPT code first, then search by slug
+let procedure = await getProcedure(slug);
+
+// If not found by code, the slug is a descriptive slug - we'd need a reverse lookup
+// For now, redirect unknown slugs to search
+if (!procedure) return Astro.redirect(`/procedures/?search=${encodeURIComponent(slug.replace(/-/g, ' '))}`);
+
+const p = procedure as any;
+const geoCosts = p.geographicCosts || [];
+const injuryMappings = p.injuryMappings || [];
+const commercialEstimates = p.commercialEstimates || {};
+const procSlug = slugify(p.description);
+
+// SEO-optimized title matching "how much does X cost" queries
+const shortName = p.description.replace(/,?\s*each\s+\d+\s+min(utes)?/i, '').replace(/\s+w\/o\s+(dye|contrast)/i, ' without contrast');
+const priceStr = p.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityRate) : null;
+
+const title = `How Much Does ${shortName} Cost? ${priceStr ? `(${priceStr})` : ''} — 2026 Rates | MedicalCosts.info`;
+const description = `${shortName} (CPT ${p.code}) costs ${priceStr || 'vary by location'}. Medicare facility rate, hospital outpatient price, surgery center cost, and estimated commercial insurance rates. Updated 2026 CMS data.`;
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": ["MedicalProcedure", "Service"],
+  "name": p.description,
+  "alternateName": `CPT ${p.code}`,
+  "code": { "@type": "MedicalCode", "codingSystem": p.codeType, "codeValue": p.code },
+  "bodyLocation": p.bodySystem,
+  "category": p.category,
+  ...(p.nationalFacilityRate && {
+    "offers": {
+      "@type": "AggregateOffer",
+      "lowPrice": p.nationalFacilityRate,
+      "highPrice": commercialEstimates.facilityHigh || p.nationalFacilityRate * 2.5,
+      "priceCurrency": "USD",
+      "offerCount": geoCosts.length || 1,
+    }
+  }),
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": `How much does ${shortName} cost?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `The Medicare rate for ${shortName} (CPT ${p.code}) is ${priceStr || 'variable'} in a facility setting. ${p.hospitalOutpatientCost ? `The hospital outpatient rate is ${formatCurrencyFull(p.hospitalOutpatientCost)}.` : ''} Commercial insurance typically pays 150-250% of Medicare (${commercialEstimates.facilityLow ? `${formatCurrencyFull(commercialEstimates.facilityLow)} to ${formatCurrencyFull(commercialEstimates.facilityHigh)}` : 'varies'}). Costs vary by geographic location.`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": `How much does ${shortName} cost without insurance?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Without insurance, ${shortName} typically costs 200-500% of the Medicare rate. The Medicare baseline is ${priceStr || 'variable'}. Many facilities offer cash-pay discounts of 20-40%. Ask your provider about self-pay pricing before your procedure.`
+      }
+    },
+    {
+      "@type": "Question",
+      "name": `Does insurance cover ${shortName}?`,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": `Most health insurance plans cover ${shortName} when medically necessary, though you'll typically pay a copay or coinsurance. Your out-of-pocket cost depends on your deductible, plan type, and whether the provider is in-network. Medicare covers this procedure at ${priceStr || 'the standard rate'}.`
+      }
+    },
+  ]
+};
+---
+
+<Base title={title} description={description} canonical={`/costs/${slug}/`} schema={schema}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumbs -->
+    <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
+      <ol class="flex items-center gap-2" itemscope itemtype="https://schema.org/BreadcrumbList">
+        <li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+          <a href="/" itemprop="item" class="hover:text-brand-600"><span itemprop="name">Home</span></a>
+          <meta itemprop="position" content="1" />
+        </li>
+        <span>/</span>
+        <li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+          <a href="/procedures/" itemprop="item" class="hover:text-brand-600"><span itemprop="name">Procedures</span></a>
+          <meta itemprop="position" content="2" />
+        </li>
+        <span>/</span>
+        <li itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+          <span itemprop="name" class="text-gray-900 font-medium">{p.code}</span>
+          <meta itemprop="position" content="3" />
+        </li>
+      </ol>
+    </nav>
+
+    <div class="grid lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-8">
+        <!-- Header with immediate price answer (AEO: price in first 300 words) -->
+        <div>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="px-3 py-1 bg-brand-100 text-brand-700 text-sm font-semibold rounded-full">{p.codeType} {p.code}</span>
+            {p.category && <span class="text-sm text-gray-500">{p.category}</span>}
+          </div>
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            How Much Does {shortName} Cost?
+          </h1>
+          <p class="text-lg text-gray-600">
+            {p.description} (CPT {p.code}) costs
+            <strong class="text-brand-700">{priceStr || 'vary by location and insurance'}</strong>
+            at Medicare rates.
+            {p.hospitalOutpatientCost && ` Hospital outpatient rate: ${formatCurrencyFull(p.hospitalOutpatientCost)}.`}
+            {commercialEstimates.facilityLow && ` With commercial insurance, expect to pay ${formatCurrencyFull(commercialEstimates.facilityLow)} to ${formatCurrencyFull(commercialEstimates.facilityHigh)}.`}
+          </p>
+        </div>
+
+        <!-- Cost comparison cards -->
+        <div class="grid sm:grid-cols-2 gap-4">
+          {p.nationalFacilityRate && (
+            <div class="bg-white rounded-xl border-2 border-brand-500 p-6">
+              <div class="text-sm text-gray-500 mb-1">Medicare (Facility)</div>
+              <div class="text-4xl font-bold text-brand-700">{formatCurrencyFull(p.nationalFacilityRate)}</div>
+              <div class="text-xs text-gray-400 mt-2">CMS PFS 2026 national rate</div>
+            </div>
+          )}
+          {p.nationalNonFacRate && p.nationalNonFacRate !== p.nationalFacilityRate && (
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+              <div class="text-sm text-gray-500 mb-1">Medicare (Office/Clinic)</div>
+              <div class="text-3xl font-bold text-gray-900">{formatCurrencyFull(p.nationalNonFacRate)}</div>
+              <div class="text-xs text-gray-400 mt-2">Non-facility setting</div>
+            </div>
+          )}
+          {p.hospitalOutpatientCost && (
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+              <div class="text-sm text-gray-500 mb-1">Hospital Outpatient</div>
+              <div class="text-3xl font-bold text-gray-900">{formatCurrencyFull(p.hospitalOutpatientCost)}</div>
+              <div class="text-xs text-gray-400 mt-2">OPPS rate</div>
+            </div>
+          )}
+          {p.ascCost && (
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+              <div class="text-sm text-gray-500 mb-1">Surgery Center (ASC)</div>
+              <div class="text-3xl font-bold text-gray-900">{formatCurrencyFull(p.ascCost)}</div>
+              <div class="text-xs text-gray-400 mt-2">Ambulatory surgery center</div>
+            </div>
+          )}
+          {commercialEstimates.facilityLow && (
+            <div class="bg-white rounded-xl border border-orange-200 p-6 sm:col-span-2">
+              <div class="text-sm text-gray-500 mb-1">Estimated Commercial Insurance / Without Insurance</div>
+              <div class="text-3xl font-bold text-orange-700">
+                {formatCurrencyFull(commercialEstimates.facilityLow)} — {formatCurrencyFull(commercialEstimates.facilityHigh)}
+              </div>
+              <div class="text-xs text-gray-400 mt-2">Estimated at 1.5x — 2.5x Medicare rates</div>
+            </div>
+          )}
+        </div>
+
+        <!-- Cost by location table -->
+        {geoCosts.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gray-50">
+              <h2 class="text-xl font-bold text-gray-900">{shortName} Cost by Location</h2>
+              <p class="text-sm text-gray-500">Medicare-adjusted rates across CMS localities</p>
+            </div>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b text-left text-gray-500 text-xs uppercase">
+                  <th class="px-6 py-2">Location</th>
+                  <th class="px-6 py-2 text-right">Medicare Rate</th>
+                  <th class="px-6 py-2 text-right">Est. Commercial</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                {geoCosts.slice(0, 25).map((geo: any) => (
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-3">
+                      <span class="font-medium">{geo.stateCode}</span>
+                      {geo.locality && geo.locality !== `Carrier ${geo.stateCode}` && <span class="text-gray-500 ml-1">— {geo.locality}</span>}
+                    </td>
+                    <td class="px-6 py-3 text-right font-semibold">{geo.facilityRate ? formatCurrencyFull(geo.facilityRate) : '—'}</td>
+                    <td class="px-6 py-3 text-right text-gray-600">
+                      {geo.estimatedCommercialLow ? `${formatCurrencyFull(geo.estimatedCommercialLow)} — ${formatCurrencyFull(geo.estimatedCommercialHigh)}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <!-- RVU Details -->
+        {p.workRvu && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">How is the Price Calculated?</h2>
+            <p class="text-sm text-gray-600 mb-4">
+              Medicare calculates procedure payments using Relative Value Units (RVUs). Each procedure has three components
+              multiplied by a conversion factor ($33.40 in 2026) and adjusted by geographic cost indices.
+            </p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <div class="text-2xl font-bold text-gray-900">{p.workRvu?.toFixed(2)}</div>
+                <div class="text-xs text-gray-500 mt-1">Work RVU</div>
+              </div>
+              {p.facilityPeRvu && (
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                  <div class="text-2xl font-bold text-gray-900">{p.facilityPeRvu?.toFixed(2)}</div>
+                  <div class="text-xs text-gray-500 mt-1">Practice Expense RVU</div>
+                </div>
+              )}
+              {p.malpracticeRvu && (
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                  <div class="text-2xl font-bold text-gray-900">{p.malpracticeRvu?.toFixed(2)}</div>
+                  <div class="text-xs text-gray-500 mt-1">Malpractice RVU</div>
+                </div>
+              )}
+              {p.totalRvu && (
+                <div class="text-center p-4 bg-brand-50 rounded-lg border border-brand-200">
+                  <div class="text-2xl font-bold text-brand-700">{p.totalRvu?.toFixed(2)}</div>
+                  <div class="text-xs text-brand-600 mt-1">Total RVU</div>
+                </div>
+              )}
+            </div>
+            <p class="text-xs text-gray-400 mt-4">
+              Payment = Total RVU ({p.totalRvu?.toFixed(2)}) x CF ($33.40) = {p.totalRvu ? formatCurrencyFull(p.totalRvu * 33.40) : 'N/A'}
+            </p>
+          </div>
+        )}
+
+        <!-- FAQ section (AEO optimized) -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 class="text-xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+          <div class="space-y-6">
+            <div>
+              <h3 class="font-semibold text-gray-900 text-lg">How much does {shortName} cost?</h3>
+              <p class="text-gray-600 mt-2">
+                The Medicare facility rate for {shortName} is {priceStr || 'variable'}.
+                {p.hospitalOutpatientCost && ` In a hospital outpatient setting, the rate is ${formatCurrencyFull(p.hospitalOutpatientCost)}.`}
+                {p.ascCost && ` At an ambulatory surgery center, the rate is ${formatCurrencyFull(p.ascCost)}.`}
+                Commercial insurance rates typically range from 150% to 250% of Medicare
+                ({commercialEstimates.facilityLow ? `${formatCurrencyFull(commercialEstimates.facilityLow)} to ${formatCurrencyFull(commercialEstimates.facilityHigh)}` : 'varies by plan'}).
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900 text-lg">How much does {shortName} cost without insurance?</h3>
+              <p class="text-gray-600 mt-2">
+                Without insurance, the cost of {shortName} can range from {commercialEstimates.facilityLow ? formatCurrencyFull(commercialEstimates.facilityLow) : '150% of Medicare'} to
+                {commercialEstimates.facilityHigh ? formatCurrencyFull(commercialEstimates.facilityHigh * 1.5) : '500% of Medicare'} depending on the facility.
+                Many hospitals and clinics offer self-pay discounts of 20-40% off their chargemaster price. Always ask about cash pricing before your visit.
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900 text-lg">Does insurance cover {shortName}?</h3>
+              <p class="text-gray-600 mt-2">
+                Most commercial health insurance plans and Medicare cover {shortName} when ordered by a physician for a medically necessary reason.
+                Your out-of-pocket cost depends on your plan's deductible, copay/coinsurance structure, and whether you use an in-network provider.
+                Check with your insurance company before scheduling to confirm coverage and get a cost estimate.
+              </p>
+            </div>
+            <div>
+              <h3 class="font-semibold text-gray-900 text-lg">Why does the cost vary so much by location?</h3>
+              <p class="text-gray-600 mt-2">
+                Medicare adjusts payments using Geographic Practice Cost Indices (GPCIs) that reflect local differences in physician work costs,
+                practice expenses, and malpractice insurance. Manhattan, San Francisco, and other high-cost areas pay significantly more than
+                rural regions. Commercial insurers follow similar geographic patterns.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="space-y-6">
+        <div class="bg-brand-50 rounded-xl p-6 border border-brand-200 sticky top-20">
+          <h3 class="font-bold text-brand-900 mb-3">Procedure Details</h3>
+          <dl class="space-y-3 text-sm">
+            <div>
+              <dt class="text-gray-500">CPT/HCPCS Code</dt>
+              <dd class="font-mono font-bold text-lg">{p.code}</dd>
+            </div>
+            {p.category && (
+              <div>
+                <dt class="text-gray-500">Category</dt>
+                <dd><a href={`/procedures/?category=${encodeURIComponent(p.category)}`} class="text-brand-600 hover:underline">{p.category}</a></dd>
+              </div>
+            )}
+            {p.bodySystem && (
+              <div>
+                <dt class="text-gray-500">Body System</dt>
+                <dd>{p.bodySystem}</dd>
+              </div>
+            )}
+            <div>
+              <dt class="text-gray-500">Data Year</dt>
+              <dd>2026</dd>
+            </div>
+            <div>
+              <dt class="text-gray-500">Source</dt>
+              <dd class="text-xs">CMS Medicare Fee Schedule</dd>
+            </div>
+          </dl>
+        </div>
+
+        {injuryMappings.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 class="font-bold text-gray-900 mb-3">Related Conditions</h3>
+            <ul class="space-y-2">
+              {injuryMappings.map((m: any) => (
+                <li>
+                  <a href={`/conditions/${m.injury?.slug || '#'}/`} class="text-sm text-brand-600 hover:underline">{m.injury?.name}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <!-- State links for this procedure -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="font-bold text-gray-900 mb-3">Cost in Your State</h3>
+          <div class="grid grid-cols-4 gap-1">
+            {STATES.slice(0, 20).map(state => (
+              <a href={`/states/${state.code.toLowerCase()}/`} class="text-xs text-center py-1 text-brand-600 hover:bg-brand-50 rounded">{state.code}</a>
+            ))}
+          </div>
+          <a href="/states/" class="text-xs text-brand-600 hover:underline mt-2 block">All states →</a>
+        </div>
+
+        <div class="bg-yellow-50 rounded-xl p-5 border border-yellow-200">
+          <p class="text-xs text-yellow-700">
+            <strong>Disclaimer:</strong> Costs are based on CMS Medicare data and may not reflect your actual charges.
+            Contact your provider and insurance for personalized cost estimates.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+</Base>
