@@ -102,6 +102,22 @@ export async function getProcedureBySlug(slug: string): Promise<Procedure | null
   return fetchApi<Procedure>(`/procedures/by-slug/${slug}`);
 }
 
+export interface ConsumerDescription {
+  code: string;
+  consumerName: string | null;
+  cmsDescription: string | null;
+  plainDescription: string | null;
+  whatToExpect: string | null;
+  typicalDuration: string | null;
+  commonReasons: string | null;
+  preparationTips: string | null;
+  source: 'consumer' | 'cms';
+}
+
+export async function getConsumerDescription(code: string): Promise<ConsumerDescription | null> {
+  return fetchApi<ConsumerDescription>(`/procedures/${code}/consumer`);
+}
+
 export async function getRelatedProcedures(code: string): Promise<Array<{
   code: string;
   description: string;

@@ -192,3 +192,16 @@ CREATE TABLE IF NOT EXISTS entity_relationships (
 CREATE INDEX IF NOT EXISTS idx_er_source ON entity_relationships(source_type, source_id);
 CREATE INDEX IF NOT EXISTS idx_er_target ON entity_relationships(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_er_rel ON entity_relationships(relationship);
+
+-- ============================================================================
+-- Consumer-Friendly Descriptions (plain-language names and info for patients)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS consumer_descriptions (
+  code TEXT PRIMARY KEY,
+  consumer_name TEXT NOT NULL,
+  plain_description TEXT,
+  what_to_expect TEXT,
+  typical_duration TEXT,
+  common_reasons TEXT,
+  preparation_tips TEXT
+);

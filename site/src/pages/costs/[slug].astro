@@ -1,7 +1,7 @@
 ---
 import Base from '@/layouts/Base.astro';
 import RelatedLinks from '@/components/RelatedLinks.astro';
-import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, formatCurrencyFull, slugify, STATES } from '@/lib/api';
+import { getProcedure, getProcedureBySlug, getRelatedProcedures, getMetricsFacts, getGraphRelationships, getConsumerDescription, formatCurrencyFull, slugify, STATES } from '@/lib/api';
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect('/procedures/');
@@ -19,15 +19,29 @@ if (!procedure) return Astro.redirect(`/procedures/?search=${encodeURIComponent(
 
 const p = procedure as any;
 
-// Fetch related procedures and interesting facts in parallel
-const [relatedProcedures, interestingFacts] = await Promise.all([
+// Fetch related procedures, knowledge graph, consumer description, and interesting facts in parallel
+const [relatedProcedures, graphData, consumerDesc, interestingFacts] = await Promise.all([
   getRelatedProcedures(p.code),
+  getGraphRelationships('procedure', p.code),
+  getConsumerDescription(p.code),
   getMetricsFacts(),
 ]);
+
+// Extract "commonly_paired" from graph data
+const commonlyPaired = (graphData?.relationships?.commonly_paired || []).slice(0, 6);
 const geoCosts = p.geographicCosts || [];
 const injuryMappings = p.injuryMappings || [];
 const commercialEstimates = p.commercialEstimates || {};
 const procSlug = slugify(p.description);
+
+// Consumer-friendly info (from dedicated endpoint or embedded in procedure response)
+const cd = consumerDesc || p.consumerDescription || null;
+const consumerName = cd?.consumerName || null;
+const plainDescription = cd?.plainDescription || null;
+const whatToExpect = cd?.whatToExpect || null;
+const typicalDuration = cd?.typicalDuration || null;
+const commonReasons = cd?.commonReasons || null;
+const preparationTips = cd?.preparationTips || null;
 
 // SEO-optimized title matching "how much does X cost" queries
 const shortName = p.description.replace(/,?\s*each\s+\d+\s+min(utes)?/i, '').replace(/\s+w\/o\s+(dye|contrast)/i, ' without contrast');
@@ -127,16 +141,32 @@ const faqSchema = {
             <span class="px-3 py-1 bg-brand-100 text-brand-700 text-sm font-semibold rounded-full">{p.codeType} {p.code}</span>
             {p.category && <span class="text-sm text-gray-500">{p.category}</span>}
           </div>
-          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            How Much Does {shortName} Cost?
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+            How Much Does {consumerName || shortName} Cost?
           </h1>
+          {consumerName && (
+            <p class="text-lg text-brand-600 font-medium mb-4">
+              Also known as: {shortName} (CPT {p.code})
+            </p>
+          )}
+          {plainDescription && (
+            <p class="text-base text-gray-700 mb-3">{plainDescription}</p>
+          )}
           <p class="text-lg text-gray-600">
-            {p.description} (CPT {p.code}) costs
+            {consumerName || p.description} (CPT {p.code}) costs
             <strong class="text-brand-700">{priceStr || 'vary by location and insurance'}</strong>
             at Medicare rates.
             {p.hospitalOutpatientCost && ` Hospital outpatient rate: ${formatCurrencyFull(p.hospitalOutpatientCost)}.`}
             {commercialEstimates.facilityLow && ` With commercial insurance, expect to pay ${formatCurrencyFull(commercialEstimates.facilityLow)} to ${formatCurrencyFull(commercialEstimates.facilityHigh)}.`}
           </p>
+          <button
+            data-add-to-list={p.code}
+            data-name={p.description}
+            data-rate={p.nationalFacilityRate || 0}
+            class="mt-4 inline-flex items-center gap-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100"
+          >
+            <svg class="w-4 h-4 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>Add to My List
+          </button>
         </div>
 
         <!-- Visual Cost Comparison Bar Chart -->
@@ -205,6 +235,152 @@ const faqSchema = {
             </div>
           )}
         </div>
+
+        <!-- What to Expect / Common Reasons / How to Prepare -->
+        {(whatToExpect || commonReasons || preparationTips) && (
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-brand-50">
+              <h2 class="text-xl font-bold text-gray-900">Patient Guide: {consumerName || shortName}</h2>
+              <p class="text-sm text-gray-500">What you need to know before your appointment</p>
+            </div>
+            <div class="p-6 space-y-6">
+              {whatToExpect && (
+                <div>
+                  <h3 class="font-semibold text-gray-900 text-lg flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    What to Expect
+                  </h3>
+                  <p class="text-gray-600 ml-7">{whatToExpect}</p>
+                </div>
+              )}
+              {typicalDuration && (
+                <div>
+                  <h3 class="font-semibold text-gray-900 text-lg flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    How Long Does It Take?
+                  </h3>
+                  <p class="text-gray-600 ml-7">{typicalDuration}</p>
+                </div>
+              )}
+              {commonReasons && (
+                <div>
+                  <h3 class="font-semibold text-gray-900 text-lg flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Common Reasons Doctors Order This
+                  </h3>
+                  <p class="text-gray-600 ml-7">{commonReasons}</p>
+                </div>
+              )}
+              {preparationTips && (
+                <div>
+                  <h3 class="font-semibold text-gray-900 text-lg flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    How to Prepare
+                  </h3>
+                  <p class="text-gray-600 ml-7">{preparationTips}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <!-- Procedures Commonly Done Together -->
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden" id="commonly-together">
+          <div class="px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-brand-50">
+            <h2 class="text-xl font-bold text-gray-900">Procedures Commonly Done Together</h2>
+            <p class="text-sm text-gray-500">These procedures are frequently performed alongside {shortName}</p>
+          </div>
+          <div id="commonly-paired-list" class="divide-y">
+            <div class="px-6 py-8 text-center text-gray-400 text-sm" id="paired-loading">Loading related procedures...</div>
+          </div>
+        </div>
+
+        <script define:vars={{ procedureCode: p.code }}>
+          // Fetch commonly paired procedures from both the graph API and related API
+          (async function() {
+            const API = 'https://medical-costs-api.david-568.workers.dev/api';
+            const container = document.getElementById('commonly-paired-list');
+            const section = document.getElementById('commonly-together');
+
+            try {
+              const [graphRes, relatedRes] = await Promise.all([
+                fetch(`${API}/graph/procedure/${procedureCode}`).then(r => r.json()).catch(() => null),
+                fetch(`${API}/related/${procedureCode}`).then(r => r.json()).catch(() => null),
+              ]);
+
+              const paired = [];
+              const seenCodes = new Set();
+              seenCodes.add(procedureCode);
+
+              // Extract commonly_paired from graph
+              const graphPaired = graphRes?.data?.relationships?.commonly_paired || [];
+              for (const rel of graphPaired) {
+                if (!seenCodes.has(rel.id)) {
+                  seenCodes.add(rel.id);
+                  paired.push({ code: rel.id, fromGraph: true });
+                }
+              }
+
+              // Also add top related procedures
+              const relatedData = relatedRes?.data || relatedRes || [];
+              const relatedArr = Array.isArray(relatedData) ? relatedData : [];
+              for (const rp of relatedArr.slice(0, 8)) {
+                if (!seenCodes.has(rp.code)) {
+                  seenCodes.add(rp.code);
+                  paired.push({ code: rp.code, description: rp.description, category: rp.category, rate: rp.nationalFacilityRate, slug: rp.slug });
+                }
+              }
+
+              if (paired.length === 0) {
+                section.style.display = 'none';
+                return;
+              }
+
+              // Fetch details for graph-sourced codes that lack description
+              const needDetails = paired.filter(p => !p.description);
+              const details = await Promise.all(
+                needDetails.map(p => fetch(`${API}/procedures/${p.code}`).then(r => r.json()).catch(() => null))
+              );
+              details.forEach((d, i) => {
+                if (d?.data) {
+                  needDetails[i].description = d.data.description;
+                  needDetails[i].rate = d.data.nationalFacilityRate;
+                  needDetails[i].category = d.data.category;
+                  needDetails[i].slug = d.data.slug;
+                }
+              });
+
+              function fmt(n) {
+                if (!n) return 'N/A';
+                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+              }
+
+              container.innerHTML = paired.filter(p => p.description).slice(0, 8).map(item => `
+                <div class="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition-colors">
+                  <div class="flex-1 min-w-0">
+                    <a href="/costs/${item.slug || item.code}/" class="text-sm font-medium text-gray-900 hover:text-brand-600 truncate block">${item.description}</a>
+                    <div class="text-xs text-gray-500">${item.code}${item.category ? ' &middot; ' + item.category : ''}</div>
+                  </div>
+                  <div class="flex items-center gap-3 ml-4 flex-shrink-0">
+                    ${item.rate ? `<span class="text-sm font-semibold text-brand-700">${fmt(item.rate)}</span>` : ''}
+                    <button
+                      data-add-to-list="${item.code}"
+                      data-name="${(item.description || '').replace(/"/g, '&quot;')}"
+                      data-rate="${item.rate || 0}"
+                      class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100"
+                    >
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                      Add
+                    </button>
+                  </div>
+                </div>
+              `).join('');
+
+            } catch (err) {
+              section.style.display = 'none';
+            }
+          })();
+        </script>
 
         <!-- Cost by location table -->
         {geoCosts.length > 0 && (
@@ -337,17 +513,28 @@ const faqSchema = {
             </div>
             <div class="divide-y">
               {relatedProcedures.map((rp: any) => (
-                <a href={`/costs/${rp.slug || rp.code}/`} class="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition-colors">
-                  <div class="min-w-0">
+                <div class="flex items-center justify-between px-6 py-3 hover:bg-gray-50 transition-colors">
+                  <a href={`/costs/${rp.slug || rp.code}/`} class="min-w-0 flex-1">
                     <div class="text-sm font-medium text-gray-900 truncate">{rp.description}</div>
                     <div class="text-xs text-gray-500">{rp.code} &middot; {rp.category}</div>
+                  </a>
+                  <div class="flex items-center gap-3 ml-4 flex-shrink-0">
+                    {rp.nationalFacilityRate && (
+                      <span class="text-sm font-semibold text-brand-700 whitespace-nowrap">
+                        {formatCurrencyFull(rp.nationalFacilityRate)}
+                      </span>
+                    )}
+                    <button
+                      data-add-to-list={rp.code}
+                      data-name={rp.description}
+                      data-rate={rp.nationalFacilityRate || 0}
+                      class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100"
+                    >
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                      Add
+                    </button>
                   </div>
-                  {rp.nationalFacilityRate && (
-                    <div class="ml-4 text-sm font-semibold text-brand-700 whitespace-nowrap">
-                      {formatCurrencyFull(rp.nationalFacilityRate)}
-                    </div>
-                  )}
-                </a>
+                </div>
               ))}
             </div>
           </div>
@@ -437,6 +624,16 @@ const faqSchema = {
               <dt class="text-gray-500">CPT/HCPCS Code</dt>
               <dd class="font-mono font-bold text-lg">{p.code}</dd>
             </div>
+            <div>
+              <dt class="text-gray-500">CMS Description</dt>
+              <dd class="text-xs text-gray-600">{p.description}</dd>
+            </div>
+            {consumerName && (
+              <div>
+                <dt class="text-gray-500">Common Name</dt>
+                <dd class="text-sm font-medium">{consumerName}</dd>
+              </div>
+            )}
             {p.category && (
               <div>
                 <dt class="text-gray-500">Category</dt>

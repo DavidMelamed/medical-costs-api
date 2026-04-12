@@ -19,6 +19,99 @@ const description = 'Free medical cost estimator. Select procedures, conditions,
       CMS Medicare 2026 data with commercial insurance estimates.
     </p>
 
+    <!-- Pre-built Treatment Bundles -->
+    <div class="mb-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Quick-Add Treatment Bundles</h2>
+      <p class="text-gray-500 mb-5 text-sm">Common procedure combinations — add an entire bundle to your cost list with one click.</p>
+      <div class="grid sm:grid-cols-2 gap-4" id="bundle-cards">
+        <!-- Typical ER Visit -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 transition-colors group">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-bold text-gray-900 group-hover:text-brand-700">Typical ER Visit</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Emergency department visit with basic workup</p>
+            </div>
+            <span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">4 procedures</span>
+          </div>
+          <ul class="text-xs text-gray-600 space-y-1 mb-4">
+            <li class="flex justify-between"><span>99285 — ER visit (high complexity)</span></li>
+            <li class="flex justify-between"><span>71045 — Chest X-ray</span></li>
+            <li class="flex justify-between"><span>36415 — Blood draw</span></li>
+            <li class="flex justify-between"><span>99213 — Follow-up office visit</span></li>
+          </ul>
+          <button
+            class="bundle-add-btn w-full px-4 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium hover:bg-brand-100 transition-colors"
+            data-bundle="er-visit"
+          >Add Entire Bundle to My List</button>
+        </div>
+
+        <!-- MRI + Follow-up -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 transition-colors group">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-bold text-gray-900 group-hover:text-brand-700">MRI + Follow-up</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Lumbar spine MRI with follow-up and therapy</p>
+            </div>
+            <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">3 procedures</span>
+          </div>
+          <ul class="text-xs text-gray-600 space-y-1 mb-4">
+            <li>72148 — MRI lumbar spine without contrast</li>
+            <li>99213 — Follow-up office visit</li>
+            <li>97110 — Therapeutic exercises</li>
+          </ul>
+          <button
+            class="bundle-add-btn w-full px-4 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium hover:bg-brand-100 transition-colors"
+            data-bundle="mri-followup"
+          >Add Entire Bundle to My List</button>
+        </div>
+
+        <!-- ACL Surgery Bundle -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 transition-colors group">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-bold text-gray-900 group-hover:text-brand-700">ACL Surgery Bundle</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Full ACL reconstruction with imaging and rehab</p>
+            </div>
+            <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">6 procedures</span>
+          </div>
+          <ul class="text-xs text-gray-600 space-y-1 mb-4">
+            <li>99285 — ER visit (high complexity)</li>
+            <li>73721 — MRI knee without contrast</li>
+            <li>27427 — ACL reconstruction</li>
+            <li>97110 — Therapeutic exercises</li>
+            <li>97530 — Therapeutic activities</li>
+            <li>99213 — Follow-up office visit</li>
+          </ul>
+          <button
+            class="bundle-add-btn w-full px-4 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium hover:bg-brand-100 transition-colors"
+            data-bundle="acl-surgery"
+          >Add Entire Bundle to My List</button>
+        </div>
+
+        <!-- Whiplash Treatment -->
+        <div class="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 transition-colors group">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-bold text-gray-900 group-hover:text-brand-700">Whiplash Treatment</h3>
+              <p class="text-xs text-gray-500 mt-0.5">ER visit, cervical MRI, and physical therapy</p>
+            </div>
+            <span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full">5 procedures</span>
+          </div>
+          <ul class="text-xs text-gray-600 space-y-1 mb-4">
+            <li>99283 — ER visit (moderate complexity)</li>
+            <li>72141 — MRI cervical spine without contrast</li>
+            <li>97110 — Therapeutic exercises</li>
+            <li>97140 — Manual therapy</li>
+            <li>99213 — Follow-up office visit</li>
+          </ul>
+          <button
+            class="bundle-add-btn w-full px-4 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-medium hover:bg-brand-100 transition-colors"
+            data-bundle="whiplash"
+          >Add Entire Bundle to My List</button>
+        </div>
+      </div>
+    </div>
+
     <div id="estimator-app">
       <!-- Search -->
       <div class="bg-white rounded-xl border border-gray-200 p-6 mb-8">
@@ -153,5 +246,75 @@ const description = 'Free medical cost estimator. Select procedures, conditions,
 
     searchBtn.addEventListener('click', search);
     searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+
+    // ---- Treatment Bundles ----
+    const BUNDLES = {
+      'er-visit': [
+        { code: '99285', name: 'Emergency dept visit (high complexity)' },
+        { code: '71045', name: 'Chest X-ray, single view' },
+        { code: '36415', name: 'Routine venipuncture (blood draw)' },
+        { code: '99213', name: 'Office/outpatient visit, established patient' },
+      ],
+      'mri-followup': [
+        { code: '72148', name: 'MRI lumbar spine without contrast' },
+        { code: '99213', name: 'Office/outpatient visit, established patient' },
+        { code: '97110', name: 'Therapeutic exercises' },
+      ],
+      'acl-surgery': [
+        { code: '99285', name: 'Emergency dept visit (high complexity)' },
+        { code: '73721', name: 'MRI knee without contrast' },
+        { code: '27427', name: 'Reconstruction, ACL' },
+        { code: '97110', name: 'Therapeutic exercises' },
+        { code: '97530', name: 'Therapeutic activities' },
+        { code: '99213', name: 'Office/outpatient visit, established patient' },
+      ],
+      'whiplash': [
+        { code: '99283', name: 'Emergency dept visit (moderate complexity)' },
+        { code: '72141', name: 'MRI cervical spine without contrast' },
+        { code: '97110', name: 'Therapeutic exercises' },
+        { code: '97140', name: 'Manual therapy techniques' },
+        { code: '99213', name: 'Office/outpatient visit, established patient' },
+      ],
+    };
+
+    document.querySelectorAll('.bundle-add-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const bundleKey = btn.getAttribute('data-bundle');
+        const bundle = BUNDLES[bundleKey];
+        if (!bundle || !window.CostList) return;
+
+        btn.textContent = 'Loading prices...';
+        btn.disabled = true;
+
+        try {
+          // Fetch Medicare rates for all procedures
+          const results = await Promise.all(
+            bundle.map(p => fetch(`${API}/procedures/${p.code}`).then(r => r.json()).catch(() => null))
+          );
+
+          const procedures = bundle.map((p, i) => ({
+            code: p.code,
+            name: results[i]?.data?.description || p.name,
+            medicareRate: results[i]?.data?.nationalFacilityRate || 0,
+          }));
+
+          const added = window.CostList.addBundle(procedures);
+          btn.textContent = added > 0 ? `Added ${added} procedure${added !== 1 ? 's' : ''}!` : 'Already in your list';
+          btn.classList.add('bg-green-100', 'text-green-700', 'border-green-300');
+          btn.classList.remove('bg-brand-50', 'text-brand-700', 'border-brand-200');
+
+          setTimeout(() => {
+            btn.textContent = 'Add Entire Bundle to My List';
+            btn.disabled = false;
+            btn.classList.remove('bg-green-100', 'text-green-700', 'border-green-300');
+            btn.classList.add('bg-brand-50', 'text-brand-700', 'border-brand-200');
+          }, 2000);
+        } catch {
+          btn.textContent = 'Error — try again';
+          btn.disabled = false;
+          setTimeout(() => { btn.textContent = 'Add Entire Bundle to My List'; }, 2000);
+        }
+      });
+    });
   </script>
 </Base>

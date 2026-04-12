@@ -100,6 +100,9 @@ export default {
       const relatedMatch = path.match(/^\/api\/related\/([^/]+)$/);
       if (relatedMatch) return handleRelatedProcedures(decodeURIComponent(relatedMatch[1]), env, cors);
 
+      const consumerMatch = path.match(/^\/api\/procedures\/([^/]+)\/consumer$/);
+      if (consumerMatch) return handleConsumerDescription(decodeURIComponent(consumerMatch[1]), env, cors);
+
       const procMatch = path.match(/^\/api\/procedures\/([^/]+)$/);
       if (procMatch) return handleProcedureDetail(decodeURIComponent(procMatch[1]), env, cors);
 
@@ -145,6 +148,7 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/metrics",
         "GET /api/metrics/facts",
         "GET /api/procedures/by-slug/:slug",
+        "GET /api/procedures/:code/consumer",
         "GET /api/related/:code",
         "GET /api/search?q=term",
       ],
@@ -257,6 +261,14 @@ async function handleProcedureDetail(code: string, env: Env, cors: Record<string
      ORDER BY ic.name, ipm.phase`,
   ).bind((proc as Record<string, unknown>).id).all();
 
+  // Consumer-friendly description
+  const consumer = await env.DB.prepare(
+    `SELECT consumer_name AS consumerName, plain_description AS plainDescription,
+            what_to_expect AS whatToExpect, typical_duration AS typicalDuration,
+            common_reasons AS commonReasons, preparation_tips AS preparationTips
+     FROM consumer_descriptions WHERE code = ?1`,
+  ).bind(code).first();
+
   // Compute commercial estimates from national rates
   const nationalRate = ((proc as Record<string, unknown>).nationalFacilityRate as number) || 0;
   const commercialEstimates = {
@@ -264,7 +276,54 @@ async function handleProcedureDetail(code: string, env: Env, cors: Record<string
     high: Math.round(nationalRate * 2.5 * 100) / 100,
   };
 
-  return success({ ...proc, commercialEstimates, geographicCosts: geoCosts, injuryMappings }, cors);
+  return success({ ...proc, commercialEstimates, geographicCosts: geoCosts, injuryMappings, consumerDescription: consumer || null }, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/procedures/:code/consumer
+// ---------------------------------------------------------------------------
+
+async function handleConsumerDescription(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
+  // Try to get consumer description
+  const consumer = await env.DB.prepare(
+    `SELECT cd.code, cd.consumer_name AS consumerName, cd.plain_description AS plainDescription,
+            cd.what_to_expect AS whatToExpect, cd.typical_duration AS typicalDuration,
+            cd.common_reasons AS commonReasons, cd.preparation_tips AS preparationTips
+     FROM consumer_descriptions cd WHERE cd.code = ?1`,
+  ).bind(code).first();
+
+  // Fall back to CMS description if no consumer entry
+  if (!consumer) {
+    const proc = await env.DB.prepare(
+      `SELECT code, description, category, body_system AS bodySystem
+       FROM medical_procedures WHERE code = ?1`,
+    ).bind(code).first();
+
+    if (!proc) return error("Procedure not found", 404, cors);
+
+    return success({
+      code: (proc as Record<string, unknown>).code,
+      consumerName: null,
+      cmsDescription: (proc as Record<string, unknown>).description,
+      plainDescription: null,
+      whatToExpect: null,
+      typicalDuration: null,
+      commonReasons: null,
+      preparationTips: null,
+      source: "cms",
+    }, cors);
+  }
+
+  // Also get CMS description for reference
+  const proc = await env.DB.prepare(
+    `SELECT description FROM medical_procedures WHERE code = ?1`,
+  ).bind(code).first();
+
+  return success({
+    ...consumer,
+    cmsDescription: proc ? (proc as Record<string, unknown>).description : null,
+    source: "consumer",
+  }, cors);
 }
 
 // ---------------------------------------------------------------------------
@@ -338,16 +397,18 @@ async function handleInjuryDetail(slug: string, env: Env, cors: Record<string, s
     try { injuryRec.commonCauses = JSON.parse(injuryRec.commonCauses as string); } catch { /* keep string */ }
   }
 
-  // Procedure mappings grouped by phase
+  // Procedure mappings grouped by phase (with consumer-friendly names)
   const { results: mappings } = await env.DB.prepare(
     `SELECT
        ipm.phase, ipm.is_common AS isCommon, ipm.typical_qty AS typicalQty,
        ipm.frequency, ipm.notes,
        mp.code, mp.code_type AS codeType, mp.description,
+       cd.consumer_name AS consumerName,
        mp.national_facility_rate AS medicareRate,
        mp.category, mp.body_system AS bodySystem
      FROM injury_procedure_mappings ipm
      JOIN medical_procedures mp ON mp.id = ipm.procedure_id
+     LEFT JOIN consumer_descriptions cd ON cd.code = mp.code
      WHERE ipm.injury_id = ?1
      ORDER BY ipm.phase, mp.code`,
   ).bind(injuryRec.id).all();
@@ -1264,27 +1325,31 @@ async function handleUnifiedSearch(url: URL, env: Env, cors: Record<string, stri
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 1), 50);
   const searchTerm = `%${q}%`;
 
-  // Search procedures (non-drug)
+  // Search procedures (non-drug) — also search consumer-friendly names
   const proceduresPromise = env.DB.prepare(
     `SELECT mp.code, mp.description, mp.category, mp.body_system AS bodySystem,
             mp.national_facility_rate AS nationalFacilityRate, ps.slug,
+            cd.consumer_name AS consumerName,
             'procedure' AS resultType
      FROM medical_procedures mp
      LEFT JOIN procedure_slugs ps ON ps.code = mp.code
-     WHERE (mp.code LIKE ?1 OR mp.description LIKE ?1)
+     LEFT JOIN consumer_descriptions cd ON cd.code = mp.code
+     WHERE (mp.code LIKE ?1 OR mp.description LIKE ?1 OR cd.consumer_name LIKE ?1)
        AND mp.category NOT LIKE 'Prescription Drug%'
      ORDER BY mp.national_facility_rate DESC
      LIMIT ?2`,
   ).bind(searchTerm, limit).all();
 
-  // Search drugs
+  // Search drugs — also search consumer-friendly names
   const drugsPromise = env.DB.prepare(
     `SELECT mp.code, mp.description, mp.category, mp.body_system AS bodySystem,
             mp.national_facility_rate AS nationalFacilityRate, ps.slug,
+            cd.consumer_name AS consumerName,
             'drug' AS resultType
      FROM medical_procedures mp
      LEFT JOIN procedure_slugs ps ON ps.code = mp.code
-     WHERE (mp.code LIKE ?1 OR mp.description LIKE ?1)
+     LEFT JOIN consumer_descriptions cd ON cd.code = mp.code
+     WHERE (mp.code LIKE ?1 OR mp.description LIKE ?1 OR cd.consumer_name LIKE ?1)
        AND mp.category LIKE 'Prescription Drug%'
      ORDER BY mp.national_facility_rate DESC
      LIMIT ?2`,

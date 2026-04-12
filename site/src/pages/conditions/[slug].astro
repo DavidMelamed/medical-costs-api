@@ -85,7 +85,7 @@ const faqSchema = {
     {
       "@type": "Question",
       "name": `What procedures are used to treat ${c.name}?`,
-      "acceptedAnswer": { "@type": "Answer", "text": `Common procedures for ${c.name} include ${breakdown.flatMap(b => b.procedures.slice(0, 3)).map((p: any) => p.description || p.code).join(', ')}. Each procedure has different costs depending on the care setting.` }
+      "acceptedAnswer": { "@type": "Answer", "text": `Common procedures for ${c.name} include ${breakdown.flatMap(b => b.procedures.slice(0, 3)).map((p: any) => p.consumerName || p.description || p.code).join(', ')}. Each procedure has different costs depending on the care setting.` }
     },
   ]
 };
@@ -211,20 +211,34 @@ const faqSchema = {
                   </div>
                   <div class="bg-white border-t divide-y">
                     {phase.procedures.map((proc: any) => (
-                      <div class="px-6 py-3 flex items-center justify-between">
-                        <div>
+                      <div class="px-6 py-3 flex items-center justify-between gap-3">
+                        <div class="flex-1 min-w-0">
                           <a href={`/costs/${proc.code}/`} class="text-sm font-medium text-brand-600 hover:underline">
-                            {proc.description || proc.code}
+                            {proc.consumerName || proc.description || proc.code}
                           </a>
+                          {proc.consumerName && (
+                            <div class="text-xs text-gray-500 mt-0.5">{proc.description}</div>
+                          )}
                           <div class="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
                             <span>CPT {proc.code}</span>
                             {proc.typicalQty > 1 && <span>x{proc.typicalQty}</span>}
                             {proc.frequency && <span>{proc.frequency}</span>}
                           </div>
                         </div>
-                        <div class="text-sm text-right">
-                          <div class="text-gray-900">{formatCurrencyFull(proc.estimatedCostLow)} — {formatCurrencyFull(proc.estimatedCostHigh)}</div>
-                          <div class="text-xs text-gray-400">Medicare: {formatCurrencyFull(proc.medicareRate)}</div>
+                        <div class="flex items-center gap-3 flex-shrink-0">
+                          <div class="text-sm text-right">
+                            <div class="text-gray-900">{formatCurrencyFull(proc.estimatedCostLow)} — {formatCurrencyFull(proc.estimatedCostHigh)}</div>
+                            <div class="text-xs text-gray-400">Medicare: {formatCurrencyFull(proc.medicareRate)}</div>
+                          </div>
+                          <button
+                            data-add-to-list={proc.code}
+                            data-name={proc.description || proc.code}
+                            data-rate={proc.medicareRate || 0}
+                            class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border transition-colors bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100 whitespace-nowrap"
+                          >
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                            Add
+                          </button>
                         </div>
                       </div>
                     ))}
