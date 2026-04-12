@@ -87,6 +87,7 @@ export default {
       if (path === "/api/metrics/facts") return handleMetricsFacts(env, cors);
       if (path === "/api/search") return handleUnifiedSearch(url, env, cors);
       if (path === "/api/body-systems") return handleBodySystems(env, cors);
+      if (path === "/api/hospitals") return handleHospitals(url, env, cors);
 
       // Body system detail
       const bodySystemMatch = path.match(/^\/api\/body-systems\/([^/]+)$/);
@@ -164,6 +165,7 @@ function handleRoot(cors: Record<string, string>): Response {
         "GET /api/procedures/:code/consumer",
         "GET /api/related/:code",
         "GET /api/search?q=term",
+        "GET /api/hospitals?state=CO&drg=470",
       ],
     },
     cors,
@@ -1325,6 +1327,110 @@ async function handleRelatedProcedures(code: string, env: Env, cors: Record<stri
   ).bind(code, p.category, p.body_system, rateLow, rateHigh, rate).all();
 
   return success(results, cors);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/hospitals?state=CO&drg=470 — Hospital-level DRG costs
+// ---------------------------------------------------------------------------
+
+async function handleHospitals(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
+  const state = url.searchParams.get("state");
+  const drg = url.searchParams.get("drg");
+  const provider = url.searchParams.get("provider");
+  const search = url.searchParams.get("search");
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+  const sort = url.searchParams.get("sort") || "charges_desc";
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramIdx = 1;
+
+  if (state) {
+    conditions.push(`provider_state = ?${paramIdx}`);
+    params.push(state.toUpperCase());
+    paramIdx++;
+  }
+  if (drg) {
+    conditions.push(`drg_code = ?${paramIdx}`);
+    params.push(drg);
+    paramIdx++;
+  }
+  if (provider) {
+    conditions.push(`provider_ccn = ?${paramIdx}`);
+    params.push(provider);
+    paramIdx++;
+  }
+  if (search) {
+    conditions.push(`(provider_name LIKE ?${paramIdx} OR drg_description LIKE ?${paramIdx})`);
+    params.push(`%${search}%`);
+    paramIdx++;
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const orderMap: Record<string, string> = {
+    charges_desc: "avg_covered_charges DESC",
+    charges_asc: "avg_covered_charges ASC",
+    payments_desc: "avg_total_payments DESC",
+    payments_asc: "avg_total_payments ASC",
+    markup_desc: "CASE WHEN avg_total_payments > 0 THEN avg_covered_charges / avg_total_payments ELSE 0 END DESC",
+    discharges_desc: "total_discharges DESC",
+    name_asc: "provider_name ASC",
+  };
+  const orderBy = orderMap[sort] || "avg_covered_charges DESC";
+
+  const countStmt = env.DB.prepare(`SELECT COUNT(*) as total FROM hospital_drg_costs ${where}`).bind(...params);
+  const countResult = await countStmt.first<{ total: number }>();
+  const total = countResult?.total ?? 0;
+
+  const dataStmt = env.DB.prepare(
+    `SELECT
+       provider_ccn AS providerCcn,
+       provider_name AS providerName,
+       provider_city AS providerCity,
+       provider_state AS providerState,
+       provider_zip AS providerZip,
+       drg_code AS drgCode,
+       drg_description AS drgDescription,
+       total_discharges AS totalDischarges,
+       avg_covered_charges AS avgCoveredCharges,
+       avg_total_payments AS avgTotalPayments,
+       avg_medicare_payments AS avgMedicarePayments,
+       CASE WHEN avg_total_payments > 0 THEN ROUND(avg_covered_charges / avg_total_payments, 2) ELSE NULL END AS chargeToPaymentRatio,
+       year
+     FROM hospital_drg_costs
+     ${where}
+     ORDER BY ${orderBy}
+     LIMIT ?${paramIdx} OFFSET ?${paramIdx + 1}`,
+  ).bind(...params, limit, offset);
+
+  const { results } = await dataStmt.all();
+
+  // Compute summary stats if filtering by DRG
+  let summary = null;
+  if (drg && state) {
+    const summaryStmt = env.DB.prepare(
+      `SELECT
+         COUNT(*) AS hospitalCount,
+         SUM(total_discharges) AS totalDischarges,
+         ROUND(AVG(avg_covered_charges), 2) AS avgCharges,
+         ROUND(MIN(avg_covered_charges), 2) AS minCharges,
+         ROUND(MAX(avg_covered_charges), 2) AS maxCharges,
+         ROUND(AVG(avg_total_payments), 2) AS avgPayments,
+         ROUND(AVG(avg_medicare_payments), 2) AS avgMedicare,
+         ROUND(AVG(CASE WHEN avg_total_payments > 0 THEN avg_covered_charges / avg_total_payments ELSE NULL END), 2) AS avgChargeToPaymentRatio
+       FROM hospital_drg_costs
+       ${where}`,
+    ).bind(...params);
+    summary = await summaryStmt.first();
+  }
+
+  return success(results, cors, {
+    pagination: { total, limit, offset },
+    ...(summary ? { summary } : {}),
+    disclaimer: "Hospital charges reflect list prices before insurance negotiations. Actual patient costs depend on insurance, deductibles, and negotiated rates.",
+  });
 }
 
 // ---------------------------------------------------------------------------

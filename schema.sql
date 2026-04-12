@@ -254,3 +254,25 @@ CREATE TABLE IF NOT EXISTS hospital_negotiated_rates (
 CREATE INDEX IF NOT EXISTS idx_hnr_code ON hospital_negotiated_rates(code);
 CREATE INDEX IF NOT EXISTS idx_hnr_payer ON hospital_negotiated_rates(payer_name);
 CREATE INDEX IF NOT EXISTS idx_hnr_state ON hospital_negotiated_rates(hospital_state);
+
+-- ============================================================================
+-- Hospital DRG Costs (CMS Inpatient by Provider, 146K rows)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS hospital_drg_costs (
+  id TEXT PRIMARY KEY,
+  provider_ccn TEXT,
+  provider_name TEXT,
+  provider_city TEXT,
+  provider_state TEXT,
+  provider_zip TEXT,
+  drg_code TEXT,
+  drg_description TEXT,
+  total_discharges INTEGER,
+  avg_covered_charges REAL,
+  avg_total_payments REAL,
+  avg_medicare_payments REAL,
+  year INTEGER DEFAULT 2023
+);
+CREATE INDEX IF NOT EXISTS idx_hdc_state ON hospital_drg_costs(provider_state);
+CREATE INDEX IF NOT EXISTS idx_hdc_drg ON hospital_drg_costs(drg_code);
+CREATE INDEX IF NOT EXISTS idx_hdc_provider ON hospital_drg_costs(provider_ccn);

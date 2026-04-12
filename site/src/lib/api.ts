@@ -342,6 +342,50 @@ export async function getMedications(conditionSlug: string) {
   return fetchApi<any>(`/medications/${conditionSlug}`);
 }
 
+// Hospital DRG costs
+export interface HospitalDrgCost {
+  providerCcn: string;
+  providerName: string;
+  providerCity: string;
+  providerState: string;
+  providerZip: string;
+  drgCode: string;
+  drgDescription: string;
+  totalDischarges: number;
+  avgCoveredCharges: number;
+  avgTotalPayments: number;
+  avgMedicarePayments: number;
+  chargeToPaymentRatio: number | null;
+  year: number;
+}
+
+export async function getHospitals(params: {
+  state?: string;
+  drg?: string;
+  search?: string;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ data: HospitalDrgCost[]; pagination: { total: number; limit: number; offset: number }; summary?: Record<string, number> }> {
+  const qs = new URLSearchParams();
+  if (params.state) qs.set('state', params.state);
+  if (params.drg) qs.set('drg', params.drg);
+  if (params.search) qs.set('search', params.search);
+  if (params.sort) qs.set('sort', params.sort);
+  qs.set('limit', String(params.limit || 50));
+  qs.set('offset', String(params.offset || 0));
+
+  const res = await fetch(`${API_BASE}/api/hospitals?${qs}`);
+  const json = await res.json();
+  return { data: json.data || [], pagination: json.pagination || { total: 0, limit: 50, offset: 0 }, summary: json.summary };
+}
+
+// Aggregate metrics (computed)
+export async function getMetrics(): Promise<Record<string, any[]>> {
+  const data = await fetchApi<any>('/metrics');
+  return data?.metrics || {};
+}
+
 export const STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
   { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },

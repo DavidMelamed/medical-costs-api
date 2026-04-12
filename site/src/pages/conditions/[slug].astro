@@ -1,16 +1,22 @@
 ---
 import Base from '@/layouts/Base.astro';
 import RelatedLinks from '@/components/RelatedLinks.astro';
-import { getInjury, getMedications, formatCurrency, formatCurrencyFull, STATES } from '@/lib/api';
+import { getInjury, getMedications, formatCurrency, formatCurrencyFull, getMetrics, STATES } from '@/lib/api';
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect('/conditions/');
 
-const [condition, medicationsData] = await Promise.all([
+const [condition, medicationsData, metrics] = await Promise.all([
   getInjury(slug),
   getMedications(slug),
+  getMetrics(),
 ]);
 if (!condition) return Astro.redirect('/conditions/');
+
+// Computed metrics
+const pathwayTotal = (metrics.treatment_pathway_total || []).find((m: any) => m.key === slug);
+const drugSavings = metrics.drug_savings || [];
+const geoRankings = (metrics.geographic_cost_ranking || []).slice(0, 5);
 
 // Process medications for display
 const medications = medicationsData?.medications || [];
@@ -409,6 +415,42 @@ const faqSchema = {
         </div>
 
         <RelatedLinks entityType="condition" entityId={slug} />
+
+        {/* Treatment Pathway Total (computed metric) */}
+        {pathwayTotal && (
+          <div class="bg-green-50 rounded-xl border border-green-200 p-6">
+            <h3 class="font-bold text-green-900 mb-2">Medicare Procedure Total</h3>
+            <div class="text-2xl font-bold text-green-700">{formatCurrencyFull(pathwayTotal.value)}</div>
+            <p class="text-xs text-gray-500 mt-1">{pathwayTotal.detail}</p>
+            <p class="text-xs text-gray-400 mt-2">This is the sum of all mapped Medicare procedure rates. Commercial insurance typically pays 1.5-2.5x this amount.</p>
+          </div>
+        )}
+
+        {/* Drug Savings Insight */}
+        {drugSavings.length > 0 && (
+          <div class="bg-blue-50 rounded-xl border border-blue-200 p-6">
+            <h3 class="font-bold text-blue-900 mb-2">Drug Cost Tip</h3>
+            <p class="text-sm text-gray-600">
+              Brand-name drugs cost <span class="font-bold text-blue-700">~60x more</span> than generics on average.
+              Ask your doctor about generic alternatives to save up to 98% on prescriptions.
+            </p>
+          </div>
+        )}
+
+        {/* Most Expensive States */}
+        {geoRankings.length > 0 && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 class="font-bold text-gray-900 mb-3">Most Expensive States</h3>
+            <div class="space-y-2">
+              {geoRankings.map((g: any, i: number) => (
+                <div class="flex items-center justify-between text-sm">
+                  <span class="text-gray-600">#{i + 1} <a href={`/states/${g.key.toLowerCase()}/`} class="text-brand-600 hover:underline">{g.key}</a></span>
+                  <span class="font-semibold">{formatCurrencyFull(g.value)} avg</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div class="bg-white rounded-xl border border-gray-200 p-6">
           <h3 class="font-bold text-gray-900 mb-3">Compare Costs</h3>

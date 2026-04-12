@@ -1,17 +1,27 @@
 ---
 import Base from '@/layouts/Base.astro';
-import { getProcedure, getCompare, formatCurrencyFull, STATES } from '@/lib/api';
+import { getProcedure, getCompare, formatCurrencyFull, getMetrics, STATES } from '@/lib/api';
 
 const { code } = Astro.params;
 if (!code) return Astro.redirect('/procedures/');
 
-const procedure = await getProcedure(code);
+const [procedure, metrics] = await Promise.all([
+  getProcedure(code),
+  getMetrics(),
+]);
 if (!procedure) return Astro.redirect('/procedures/');
 
 const p = procedure as any;
 const geoCosts = p.geographicCosts || [];
 const injuryMappings = p.injuryMappings || [];
 const commercialEstimates = p.commercialEstimates || {};
+
+// Computed metrics for this procedure
+const insuranceMarkup = (metrics.insurance_markup || []).find((m: any) => m.key === code);
+const categoryStats = (metrics.category_cost_stats || []).find((m: any) => m.key === p.category);
+const complexityTier = p.totalRvu
+  ? p.totalRvu < 2 ? 'Simple' : p.totalRvu < 5 ? 'Moderate' : p.totalRvu < 15 ? 'Complex' : p.totalRvu < 30 ? 'Major' : 'Extreme'
+  : null;
 
 const title = `${p.description} (CPT ${p.code}) Cost — ${p.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityRate) : 'See Rates'} | MedicalCosts.info`;
 const description = `How much does ${p.description} cost? Medicare facility rate: ${p.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityRate) : 'varies'}. Hospital outpatient: ${p.hospitalOutpatientCost ? formatCurrencyFull(p.hospitalOutpatientCost) : 'varies'}. Compare costs across settings and locations.`;
@@ -259,6 +269,43 @@ const faqSchema = {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Calculated Metrics */}
+        {(insuranceMarkup || categoryStats || complexityTier) && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 class="font-bold text-gray-900 mb-3">Cost Insights</h3>
+            <div class="space-y-3 text-sm">
+              {complexityTier && (
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-500">Complexity</span>
+                  <span class={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                    complexityTier === 'Simple' ? 'bg-green-100 text-green-700' :
+                    complexityTier === 'Moderate' ? 'bg-blue-100 text-blue-700' :
+                    complexityTier === 'Complex' ? 'bg-orange-100 text-orange-700' :
+                    complexityTier === 'Major' ? 'bg-red-100 text-red-700' :
+                    'bg-purple-100 text-purple-700'
+                  }`}>{complexityTier}</span>
+                </div>
+              )}
+              {insuranceMarkup && (
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-gray-500">Hospital Markup</span>
+                    <span class="font-bold text-red-600">{insuranceMarkup.value}x</span>
+                  </div>
+                  <p class="text-xs text-gray-400 mt-0.5">Hospital outpatient charges vs. Medicare rate</p>
+                </div>
+              )}
+              {categoryStats && (
+                <div>
+                  <div class="text-gray-500 mb-1">Category Average</div>
+                  <div class="font-semibold">{formatCurrencyFull(categoryStats.value)}</div>
+                  <p class="text-xs text-gray-400 mt-0.5">{categoryStats.detail}</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
