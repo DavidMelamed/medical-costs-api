@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "medical-costs-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // D1 SQLite database binding
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "medical-costs-db",
+      "database_id": "f3c4c390-86ac-4ffc-a887-0198c35abdc2"
+    }
+  ],
+
+  // CORS headers for CrashStory integration
+  "vars": {
+    "ALLOWED_ORIGINS": "https://crashstory.com,https://www.crashstory.com,http://localhost:3000"
+  }
+}

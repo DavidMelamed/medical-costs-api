@@ -1,0 +1,26 @@
+{
+  "name": "medical-costs-api",
+  "version": "1.0.0",
+  "description": "Medical cost estimation API powered by CMS Medicare data, CDC WISQARS, and NHTSA crash cost studies. Cloudflare Workers + D1.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 execute medical-costs-db --local --file=schema.sql",
+    "db:seed": "wrangler d1 execute medical-costs-db --local --file=seed.sql",
+    "db:init": "npm run db:create && npm run db:seed",
+    "db:create:remote": "wrangler d1 execute medical-costs-db --remote --file=schema.sql",
+    "db:seed:remote": "wrangler d1 execute medical-costs-db --remote --file=seed.sql",
+    "db:init:remote": "npm run db:create:remote && npm run db:seed:remote",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250410.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.1.0",
+    "wrangler": "^4.27.0"
+  }
+}
