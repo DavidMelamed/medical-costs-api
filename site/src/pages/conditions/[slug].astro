@@ -131,7 +131,7 @@ const faqSchema = {
 ---
 
 <Base title={title} description={description} canonical={`/conditions/${slug}/`} schema={fetchError ? undefined : schema}>
-  {fetchError ? (
+  {fetchError && (
     <div class="max-w-3xl mx-auto px-4 py-16 text-center">
       <h1 class="text-3xl font-bold text-gray-900 mb-4">Condition Not Found</h1>
       <p class="text-gray-600 mb-6">{fetchError === 'Condition not found' ? `We couldn't find a condition matching "${slug.replace(/-/g, ' ')}".` : `Something went wrong: ${fetchError}`}</p>
@@ -140,7 +140,8 @@ const faqSchema = {
         <a href="/procedures/" class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Search Procedures</a>
       </div>
     </div>
-  ) : (
+  )}
+  {!fetchError && (
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <nav class="text-sm text-gray-500 mb-6">
       <a href="/" class="hover:text-brand-600">Home</a>
@@ -490,6 +491,6 @@ const faqSchema = {
     </div>
   </div>
 
-  {!fetchError && <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />}
   )}
+  {!fetchError && <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />}
 </Base>

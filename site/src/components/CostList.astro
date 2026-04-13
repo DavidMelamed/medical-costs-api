@@ -2,13 +2,12 @@
 // CostList.astro — Sticky "My Cost List" sidebar component
 // Included in Base layout, appears on every page
 // Uses vanilla JS + localStorage for persistence
-import { API_BASE } from '@/lib/config';
+// API URL is injected via window.__MEDICAL_COSTS_API__ from Base layout
 ---
 
 <!-- Floating toggle button (bottom-right) -->
 <button
   id="cost-list-toggle"
-  data-api-base={API_BASE}
   class="fixed bottom-6 right-6 z-[60] bg-brand-600 text-white w-14 h-14 rounded-full shadow-lg hover:bg-brand-700 transition-all flex items-center justify-center group"
   aria-label="Open cost list"
   style="display:none;"

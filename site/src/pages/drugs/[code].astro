@@ -7,12 +7,20 @@ import { API_BASE } from '@/lib/config';
 const { code } = Astro.params;
 if (!code) return Astro.redirect('/drugs/');
 
-const drug = await getDrug(code);
-if (!drug) return Astro.redirect('/drugs/');
+let drug: any = null;
+let fetchError: string | null = null;
+try {
+  drug = await getDrug(code);
+} catch (e) {
+  fetchError = e instanceof Error ? e.message : 'Failed to load drug data';
+}
+if (!drug && !fetchError) {
+  fetchError = 'Drug not found';
+}
 
-const d = drug as any;
-const isBrand = d.category === 'Prescription Drug - Brand';
-const nadacPerUnit = d.nationalFacilityRate || d.nationalNonFacRate || 0;
+const d = drug ? (drug as any) : null;
+const isBrand = d?.category === 'Prescription Drug - Brand';
+const nadacPerUnit = d?.nationalFacilityRate || d?.nationalNonFacRate || 0;
 const est30Day = nadacPerUnit * 30;
 const est90Day = nadacPerUnit * 90;
 const estAnnual = nadacPerUnit * 365;
@@ -23,7 +31,7 @@ const estRetailAnnual = estRetailPerUnit * 365;
 // Fetch generic alternatives for brand drugs
 let genericAlts: any[] = [];
 let brandName = '';
-if (isBrand) {
+if (d && isBrand) {
   brandName = d.description.split(/\s+\d/)[0].trim();
   try {
     const comparison = await getDrugComparison(brandName);
@@ -35,13 +43,15 @@ if (isBrand) {
 
 // Fetch similar drugs (same dosage form or related name)
 let similarDrugs: any[] = [];
-try {
-  const descParts = d.description.split(/\s+/);
-  const firstWord = descParts[0];
-  const res = await fetch(`${API_BASE}/api/procedures?category=Prescription+Drug&search=${encodeURIComponent(firstWord)}&limit=6&offset=0`);
-  const json = await res.json();
-  similarDrugs = (json.data || []).filter((sd: any) => sd.code !== code).slice(0, 5);
-} catch {}
+if (d) {
+  try {
+    const descParts = d.description.split(/\s+/);
+    const firstWord = descParts[0];
+    const res = await fetch(`${API_BASE}/api/procedures?category=Prescription+Drug&search=${encodeURIComponent(firstWord)}&limit=6&offset=0`);
+    const json = await res.json();
+    similarDrugs = (json.data || []).filter((sd: any) => sd.code !== code).slice(0, 5);
+  } catch {}
+}
 
 // Consumer-friendly description
 const drugDescriptions: Record<string, string> = {
@@ -56,7 +66,7 @@ const drugDescriptions: Record<string, string> = {
   'ATORVASTATIN': 'Atorvastatin (generic Lipitor) is a statin used to lower cholesterol and reduce the risk of heart attack and stroke. It is the most prescribed cholesterol medication in the US.',
   'AMOXICILLIN': 'Amoxicillin is a widely-used antibiotic for treating bacterial infections including ear infections, strep throat, pneumonia, and urinary tract infections. It is affordable and available in many generic forms.',
 };
-const consumerDesc = drugDescriptions[d.description.split(/\s+/)[0]] || null;
+const consumerDesc = d ? (drugDescriptions[d.description.split(/\s+/)[0]] || null) : null;
 
 function drugDisplayName(desc: string): string {
   return desc.split(' ').map((w: string, i: number) => {
@@ -72,13 +82,17 @@ function formatNadacPrice(rate: number): string {
   return `$${rate.toFixed(2)}`;
 }
 
-const displayName = drugDisplayName(d.description);
+const displayName = d ? drugDisplayName(d.description) : code;
 // Extract just the drug name (first word or two) for FAQ
-const drugBaseName = d.description.split(/\s+\d/)[0].trim();
-const drugBaseNameFormatted = drugDisplayName(drugBaseName);
+const drugBaseName = d ? d.description.split(/\s+\d/)[0].trim() : code;
+const drugBaseNameFormatted = d ? drugDisplayName(drugBaseName) : code;
 
-const title = `How Much Does ${drugBaseNameFormatted} Cost? — 2026 NADAC Price | MedicalCosts.info`;
-const description = `${displayName} costs ${formatNadacPrice(nadacPerUnit)} per unit (NADAC). ${isBrand ? 'Brand name' : 'Generic'} medication. Estimated 30-day supply: ${formatCurrencyFull(Math.round(est30Day * 100) / 100)}. CMS pharmacy acquisition cost data.`;
+const title = fetchError
+  ? `Drug Not Found — MedicalCosts.info`
+  : `How Much Does ${drugBaseNameFormatted} Cost? — 2026 NADAC Price | MedicalCosts.info`;
+const description = fetchError
+  ? 'The requested drug could not be found. Search our database of drug prices.'
+  : `${displayName} costs ${formatNadacPrice(nadacPerUnit)} per unit (NADAC). ${isBrand ? 'Brand name' : 'Generic'} medication. Estimated 30-day supply: ${formatCurrencyFull(Math.round(est30Day * 100) / 100)}. CMS pharmacy acquisition cost data.`;
 
 const schema = {
   "@context": "https://schema.org",
@@ -128,7 +142,18 @@ const faqSchema = {
 };
 ---
 
-<Base title={title} description={description} canonical={`/drugs/${code}/`} schema={schema}>
+<Base title={title} description={description} canonical={`/drugs/${code}/`} schema={fetchError ? undefined : schema}>
+  {fetchError && (
+    <div class="max-w-3xl mx-auto px-4 py-16 text-center">
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">Drug Not Found</h1>
+      <p class="text-gray-600 mb-6">{fetchError === 'Drug not found' ? `We couldn't find a drug with code "${code}".` : `Something went wrong: ${fetchError}`}</p>
+      <div class="flex justify-center gap-4">
+        <a href="/drugs/" class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">Browse All Drugs</a>
+        <a href={`/drugs/?search=${encodeURIComponent(code)}`} class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Search for "{code}"</a>
+      </div>
+    </div>
+  )}
+  {!fetchError && (
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Breadcrumbs -->
     <nav class="text-sm text-gray-500 mb-6">
@@ -390,5 +415,6 @@ const faqSchema = {
   </div>
 
   <!-- FAQ Schema -->
-  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+  {!fetchError && <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />}
+  )}
 </Base>
