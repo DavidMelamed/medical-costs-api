@@ -56,13 +56,13 @@ const hasNegotiatedRates = topPayers.length > 0;
 
 // Extract "commonly_paired" from graph data
 const commonlyPaired = (graphData?.relationships?.commonly_paired || []).slice(0, 6);
-const geoCosts = p.geographicCosts || [];
-const injuryMappings = p.injuryMappings || [];
-const commercialEstimates = p.commercialEstimates || {};
-const procSlug = slugify(p.description);
+const geoCosts = p?.geographicCosts || [];
+const injuryMappings = p?.injuryMappings || [];
+const commercialEstimates = p?.commercialEstimates || {};
+const procSlug = p ? slugify(p.description) : '';
 
 // Consumer-friendly info (from dedicated endpoint or embedded in procedure response)
-const cd = consumerDesc || p.consumerDescription || null;
+const cd = consumerDesc || p?.consumerDescription || null;
 const consumerName = cd?.consumerName || null;
 const plainDescription = cd?.plainDescription || null;
 const whatToExpect = cd?.whatToExpect || null;
@@ -71,11 +71,15 @@ const commonReasons = cd?.commonReasons || null;
 const preparationTips = cd?.preparationTips || null;
 
 // SEO-optimized title matching "how much does X cost" queries
-const shortName = p.description.replace(/,?\s*each\s+\d+\s+min(utes)?/i, '').replace(/\s+w\/o\s+(dye|contrast)/i, ' without contrast');
-const priceStr = p.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityRate) : null;
+const shortName = p ? p.description.replace(/,?\s*each\s+\d+\s+min(utes)?/i, '').replace(/\s+w\/o\s+(dye|contrast)/i, ' without contrast') : slug;
+const priceStr = p?.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityRate) : null;
 
-const title = `How Much Does ${shortName} Cost? ${priceStr ? `(${priceStr})` : ''} — 2026 Rates | MedicalCosts.info`;
-const description = `${shortName} (CPT ${p.code}) costs ${priceStr || 'vary by location'}. Medicare facility rate, hospital outpatient price, surgery center cost, and estimated commercial insurance rates. Updated 2026 CMS data.`;
+const title = fetchError
+  ? `Procedure Not Found — MedicalCosts.info`
+  : `How Much Does ${shortName} Cost? ${priceStr ? `(${priceStr})` : ''} — 2026 Rates | MedicalCosts.info`;
+const description = fetchError
+  ? 'The requested procedure could not be found. Search our database of medical procedure costs.'
+  : `${shortName} (CPT ${p.code}) costs ${priceStr || 'vary by location'}. Medicare facility rate, hospital outpatient price, surgery center cost, and estimated commercial insurance rates. Updated 2026 CMS data.`;
 
 // Build cost comparison data for bar chart
 const costBars: Array<{ label: string; sublabel: string; amount: number; color: string }> = [];
@@ -151,6 +155,16 @@ const faqSchema = {
 ---
 
 <Base title={title} description={description} canonical={`/costs/${slug}/`} schema={schema}>
+  {fetchError ? (
+    <div class="max-w-3xl mx-auto px-4 py-16 text-center">
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">Procedure Not Found</h1>
+      <p class="text-gray-600 mb-6">{fetchError === 'Procedure not found' ? `We couldn't find a procedure matching "${slug.replace(/-/g, ' ')}".` : `Something went wrong: ${fetchError}`}</p>
+      <div class="flex justify-center gap-4">
+        <a href="/procedures/" class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">Browse All Procedures</a>
+        <a href={`/procedures/?search=${encodeURIComponent(slug.replace(/-/g, ' '))}`} class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Search for "{slug.replace(/-/g, ' ')}"</a>
+      </div>
+    </div>
+  ) : (
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Breadcrumbs -->
     <nav class="text-sm text-gray-500 mb-6" aria-label="Breadcrumb">
@@ -908,5 +922,6 @@ const faqSchema = {
     </div>
   </div>
 
-  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+  {!fetchError && <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />}
+  )}
 </Base>

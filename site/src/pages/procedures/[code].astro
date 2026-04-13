@@ -5,11 +5,20 @@ import { getProcedure, getCompare, formatCurrencyFull, getMetrics, STATES } from
 const { code } = Astro.params;
 if (!code) return Astro.redirect('/procedures/');
 
-const [procedure, metrics] = await Promise.all([
-  getProcedure(code),
-  getMetrics(),
-]);
-if (!procedure) return Astro.redirect('/procedures/');
+let procedure: any = null;
+let metrics: any = {};
+let fetchError: string | null = null;
+try {
+  [procedure, metrics] = await Promise.all([
+    getProcedure(code),
+    getMetrics(),
+  ]);
+} catch (e) {
+  fetchError = e instanceof Error ? e.message : 'Failed to load procedure data';
+}
+if (!procedure && !fetchError) {
+  fetchError = 'Procedure not found';
+}
 
 const p = procedure as any;
 const geoCosts = p.geographicCosts || [];

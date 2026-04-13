@@ -6,17 +6,27 @@ import { getInjury, getMedications, formatCurrency, formatCurrencyFull, getMetri
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect('/conditions/');
 
-const [condition, medicationsData, metrics] = await Promise.all([
-  getInjury(slug),
-  getMedications(slug),
-  getMetrics(),
-]);
-if (!condition) return Astro.redirect('/conditions/');
+let condition: any = null;
+let medicationsData: any = null;
+let metrics: any = {};
+let fetchError: string | null = null;
+try {
+  [condition, medicationsData, metrics] = await Promise.all([
+    getInjury(slug),
+    getMedications(slug),
+    getMetrics(),
+  ]);
+} catch (e) {
+  fetchError = e instanceof Error ? e.message : 'Failed to load condition data';
+}
+if (!condition && !fetchError) {
+  fetchError = 'Condition not found';
+}
 
 // Computed metrics
-const pathwayTotal = (metrics.treatment_pathway_total || []).find((m: any) => m.key === slug);
-const drugSavings = metrics.drug_savings || [];
-const geoRankings = (metrics.geographic_cost_ranking || []).slice(0, 5);
+const pathwayTotal = ((metrics || {}).treatment_pathway_total || []).find((m: any) => m.key === slug);
+const drugSavings = (metrics || {}).drug_savings || [];
+const geoRankings = ((metrics || {}).geographic_cost_ranking || []).slice(0, 5);
 
 // Process medications for display
 const medications = medicationsData?.medications || [];
@@ -34,7 +44,7 @@ function formatNadacPrice(rate: number): string {
   return `$${rate.toFixed(2)}`;
 }
 
-const c = condition;
+const c = condition || {};
 const breakdown = c.treatmentBreakdown || [];
 const severityMap = c.crashSeverityMap || [];
 const totalCost = c.estimatedTotalCost || { low: 0, high: 0 };
@@ -43,8 +53,12 @@ const costRange = c.moderateCostLow && c.moderateCostHigh
   ? `${formatCurrency(c.moderateCostLow)} — ${formatCurrency(c.moderateCostHigh)}`
   : totalCost.low > 0 ? `${formatCurrency(totalCost.low)} — ${formatCurrency(totalCost.high)}` : 'varies';
 
-const title = `How Much Does ${c.name} Treatment Cost? (${costRange}) — 2026 | MedicalCosts.info`;
-const description = `${c.name} treatment costs: ${costRange}. Detailed breakdown of procedures, Medicare rates, and estimated commercial insurance costs. ${c.bodyRegion ? `${c.bodyRegion} condition.` : ''}`;
+const title = fetchError
+  ? `Condition Not Found — MedicalCosts.info`
+  : `How Much Does ${c.name} Treatment Cost? (${costRange}) — 2026 | MedicalCosts.info`;
+const description = fetchError
+  ? 'The requested condition could not be found. Search our database of medical condition costs.'
+  : `${c.name} treatment costs: ${costRange}. Detailed breakdown of procedures, Medicare rates, and estimated commercial insurance costs. ${c.bodyRegion ? `${c.bodyRegion} condition.` : ''}`;
 
 const phaseLabels: Record<string, string> = {
   EMERGENCY: 'Emergency Care', ACUTE: 'Diagnosis & Acute Treatment',
@@ -116,7 +130,17 @@ const faqSchema = {
 };
 ---
 
-<Base title={title} description={description} canonical={`/conditions/${slug}/`} schema={schema}>
+<Base title={title} description={description} canonical={`/conditions/${slug}/`} schema={fetchError ? undefined : schema}>
+  {fetchError ? (
+    <div class="max-w-3xl mx-auto px-4 py-16 text-center">
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">Condition Not Found</h1>
+      <p class="text-gray-600 mb-6">{fetchError === 'Condition not found' ? `We couldn't find a condition matching "${slug.replace(/-/g, ' ')}".` : `Something went wrong: ${fetchError}`}</p>
+      <div class="flex justify-center gap-4">
+        <a href="/conditions/" class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors">Browse All Conditions</a>
+        <a href="/procedures/" class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Search Procedures</a>
+      </div>
+    </div>
+  ) : (
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <nav class="text-sm text-gray-500 mb-6">
       <a href="/" class="hover:text-brand-600">Home</a>
@@ -466,5 +490,6 @@ const faqSchema = {
     </div>
   </div>
 
-  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+  {!fetchError && <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />}
+  )}
 </Base>
