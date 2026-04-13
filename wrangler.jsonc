@@ -16,6 +16,7 @@
 
   // CORS headers for CrashStory integration
   "vars": {
-    "ALLOWED_ORIGINS": "https://crashstory.com,https://www.crashstory.com,http://localhost:3000"
+    "ALLOWED_ORIGINS": "https://crashstory.com,https://www.crashstory.com,http://localhost:3000,http://localhost:4321,https://medical-costs-site.pages.dev",
+    "SEED_TOKEN": "seed-medical-costs-2026"
   }
 }

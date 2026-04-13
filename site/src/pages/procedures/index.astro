@@ -23,7 +23,7 @@ const description = search
   : `Browse costs for ${pagination.total?.toLocaleString()} medical procedures. Medicare rates, hospital outpatient costs, and surgery center prices from CMS 2026 data.`;
 ---
 
-<Base title={title} description={description} canonical="/procedures/">
+<Base title={title} description={description} canonical={offset === 0 ? '/procedures/' : undefined}>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Breadcrumbs -->
     <nav class="text-sm text-gray-500 mb-6">

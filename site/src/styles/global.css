@@ -7,3 +7,45 @@
     @apply bg-gray-50 text-gray-900 antialiased;
   }
 }
+
+@layer components {
+  /* Skeleton loading animation for content areas */
+  .skeleton {
+    @apply bg-gray-200 rounded animate-pulse;
+  }
+
+  .skeleton-text {
+    @apply skeleton h-4 w-full mb-2;
+  }
+
+  .skeleton-text-sm {
+    @apply skeleton h-3 w-3/4 mb-2;
+  }
+
+  .skeleton-heading {
+    @apply skeleton h-8 w-2/3 mb-4;
+  }
+
+  .skeleton-card {
+    @apply skeleton h-32 w-full rounded-xl mb-4;
+  }
+
+  /* Loading spinner */
+  .loading-spinner {
+    @apply inline-block w-6 h-6 border-2 border-gray-200 border-t-brand-600 rounded-full animate-spin;
+  }
+
+  /* Loading overlay for fetch-driven content */
+  .loading-container {
+    @apply flex items-center justify-center py-12 text-gray-500;
+  }
+
+  .loading-container::before {
+    content: '';
+    @apply loading-spinner mr-3;
+  }
+
+  .loading-container::after {
+    content: 'Loading...';
+  }
+}

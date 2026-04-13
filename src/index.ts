@@ -8,6 +8,8 @@
 interface Env {
   DB: D1Database;
   ALLOWED_ORIGINS: string;
+  SEED_ENABLED?: string;
+  SEED_TOKEN?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,40 +239,48 @@ async function handleProcedures(url: URL, env: Env, cors: Record<string, string>
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 1), 200);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
 
+  if (search && search.length > 200) return error("Search query too long", 400, cors);
+
   const conditions: string[] = [];
   const params: unknown[] = [];
 
+  // When searching, also search consumer_descriptions.consumer_name via LEFT JOIN
+  const useConsumerJoin = !!search;
+
   if (search) {
-    conditions.push("(code LIKE ?1 OR description LIKE ?1)");
+    conditions.push("(mp.code LIKE ?1 OR mp.description LIKE ?1 OR cd.consumer_name LIKE ?1)");
     params.push(`%${search}%`);
   }
   if (category) {
-    conditions.push(`category = ?${params.length + 1}`);
+    conditions.push(`mp.category = ?${params.length + 1}`);
     params.push(category);
   }
   if (bodySystem) {
-    conditions.push(`body_system = ?${params.length + 1}`);
+    conditions.push(`mp.body_system = ?${params.length + 1}`);
     params.push(bodySystem);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const joinClause = useConsumerJoin ? "LEFT JOIN consumer_descriptions cd ON cd.code = mp.code" : "";
 
-  const countStmt = env.DB.prepare(`SELECT COUNT(*) as total FROM medical_procedures ${where}`).bind(...params);
+  const countStmt = env.DB.prepare(
+    `SELECT COUNT(*) as total FROM medical_procedures mp ${joinClause} ${where}`
+  ).bind(...params);
   const countResult = await countStmt.first<{ total: number }>();
   const total = countResult?.total ?? 0;
 
   const dataStmt = env.DB.prepare(
     `SELECT
-       id, code, code_type AS codeType, description, category, body_system AS bodySystem,
-       work_rvu AS workRvu, total_rvu AS totalRvu,
-       national_facility_rate AS nationalFacilityRate,
-       national_non_fac_rate AS nationalNonFacRate,
-       hospital_outpatient_cost AS hospitalOutpatientCost,
-       asc_cost AS ascCost,
-       effective_year AS effectiveYear,
-       source_dataset AS sourceDataset
-     FROM medical_procedures ${where}
-     ORDER BY code
+       mp.id, mp.code, mp.code_type AS codeType, mp.description, mp.category, mp.body_system AS bodySystem,
+       mp.work_rvu AS workRvu, mp.total_rvu AS totalRvu,
+       mp.national_facility_rate AS nationalFacilityRate,
+       mp.national_non_fac_rate AS nationalNonFacRate,
+       mp.hospital_outpatient_cost AS hospitalOutpatientCost,
+       mp.asc_cost AS ascCost,
+       mp.effective_year AS effectiveYear,
+       mp.source_dataset AS sourceDataset${useConsumerJoin ? ", cd.consumer_name AS consumerName" : ""}
+     FROM medical_procedures mp ${joinClause} ${where}
+     ORDER BY mp.code
      LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`,
   ).bind(...params, limit, offset);
 
@@ -1472,7 +1482,7 @@ async function handleHospitals(url: URL, env: Env, cors: Record<string, string>)
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const orderMap: Record<string, string> = {
+  const HOSPITAL_SORT_MAP: Record<string, string> = {
     charges_desc: "h.avg_covered_charges DESC",
     charges_asc: "h.avg_covered_charges ASC",
     payments_desc: "h.avg_total_payments DESC",
@@ -1482,7 +1492,7 @@ async function handleHospitals(url: URL, env: Env, cors: Record<string, string>)
     name_asc: "h.provider_name ASC",
     rating_desc: "hq.overall_rating DESC",
   };
-  const orderBy = orderMap[sort] || "h.avg_covered_charges DESC";
+  const orderBy = (sort in HOSPITAL_SORT_MAP) ? HOSPITAL_SORT_MAP[sort] : "h.avg_covered_charges DESC";
 
   const countStmt = env.DB.prepare(`SELECT COUNT(*) as total FROM hospital_drg_costs h ${where}`).bind(...params);
   const countResult = await countStmt.first<{ total: number }>();
@@ -1548,16 +1558,22 @@ async function handleHospitalRankings(url: URL, env: Env, cors: Record<string, s
   const direction = url.searchParams.get("direction") || "desc";
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "10", 10) || 10, 1), 100);
 
-  const orderMap: Record<string, string> = {
-    charges: "avgCharges",
-    payments: "avgPayments",
-    markup: "avgMarkup",
-    discharges: "totalDischarges",
-    value: "avgMarkup",
+  // Strict mapping of metric+direction to full ORDER BY clause to prevent SQL injection
+  const RANKING_SORT_MAP: Record<string, string> = {
+    charges_desc: "avgCharges DESC",
+    charges_asc: "avgCharges ASC",
+    payments_desc: "avgPayments DESC",
+    payments_asc: "avgPayments ASC",
+    markup_desc: "avgMarkup DESC",
+    markup_asc: "avgMarkup ASC",
+    discharges_desc: "totalDischarges DESC",
+    discharges_asc: "totalDischarges ASC",
+    value_desc: "avgMarkup ASC",  // "value" = lowest markup, so always ASC
+    value_asc: "avgMarkup ASC",
   };
-  const orderCol = orderMap[metric] || "avgCharges";
-  const dir = direction === "asc" ? "ASC" : "DESC";
-  const actualDir = metric === "value" ? "ASC" : dir;
+  const dir = direction === "asc" ? "asc" : "desc";
+  const sortKey = `${metric}_${dir}`;
+  const rankingOrder = (sortKey in RANKING_SORT_MAP) ? RANKING_SORT_MAP[sortKey] : "avgCharges DESC";
 
   const { results } = await env.DB.prepare(`
     SELECT
@@ -1574,7 +1590,7 @@ async function handleHospitalRankings(url: URL, env: Env, cors: Record<string, s
     FROM hospital_drg_costs
     GROUP BY provider_ccn
     HAVING COUNT(*) >= 5
-    ORDER BY ${orderCol} ${actualDir}
+    ORDER BY ${rankingOrder}
     LIMIT ?1
   `).bind(limit).all();
 
@@ -2085,6 +2101,7 @@ async function handleInsurerDetail(payerName: string, env: Env, cors: Record<str
 async function handleUnifiedSearch(url: URL, env: Env, cors: Record<string, string>): Promise<Response> {
   const q = url.searchParams.get("q");
   if (!q || q.length < 2) return error("Query parameter 'q' is required (min 2 chars)", 400, cors);
+  if (q.length > 200) return error("Search query too long", 400, cors);
 
   const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 1), 50);
   const searchTerm = `%${q}%`;
@@ -2155,8 +2172,14 @@ async function handleUnifiedSearch(url: URL, env: Env, cors: Record<string, stri
 import seedData from "./seed-data.json";
 
 async function handleSeed(request: Request, env: Env, cors: Record<string, string>): Promise<Response> {
+  // In production, require the env var SEED_ENABLED=true
+  if (!env.SEED_ENABLED) {
+    return error("Not found", 404, cors);
+  }
+
   const authHeader = request.headers.get("Authorization");
-  if (authHeader !== "Bearer seed-medical-costs-2026") {
+  const seedToken = env.SEED_TOKEN || "seed-medical-costs-2026";
+  if (authHeader !== `Bearer ${seedToken}`) {
     return error("Unauthorized", 401, cors);
   }
 

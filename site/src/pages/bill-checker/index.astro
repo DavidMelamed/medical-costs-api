@@ -202,7 +202,7 @@ const faqSchema = {
       <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
         <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
           How do I know if my medical bill is too high?
-          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <svg aria-label="Toggle answer" class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </summary>
         <div class="px-6 pb-4 text-gray-600 text-sm">
           Compare your bill to Medicare rates (publicly available), which represent the federal government's benchmark. Most commercial insurance pays 150-250% of Medicare. If your bill exceeds 300% of Medicare, it is likely above average and worth negotiating.
@@ -211,7 +211,7 @@ const faqSchema = {
       <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
         <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
           What is a fair price for a medical procedure?
-          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <svg aria-label="Toggle answer" class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </summary>
         <div class="px-6 pb-4 text-gray-600 text-sm">
           A fair price for most medical procedures falls between 150% and 250% of the Medicare reimbursement rate. This range reflects typical commercial insurance negotiated rates. Anything above 300% of Medicare is generally considered high.
@@ -220,7 +220,7 @@ const faqSchema = {
       <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
         <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
           Can I negotiate my medical bill?
-          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <svg aria-label="Toggle answer" class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </summary>
         <div class="px-6 pb-4 text-gray-600 text-sm">
           Yes. Studies show that up to 80% of medical bills contain errors, and most hospitals will negotiate, especially for uninsured or underinsured patients. Having data on Medicare rates and average commercial prices strengthens your position significantly.
@@ -229,7 +229,7 @@ const faqSchema = {
       <details class="group bg-white rounded-lg border border-gray-200 overflow-hidden">
         <summary class="flex items-center justify-between cursor-pointer px-6 py-4 font-semibold text-gray-900 hover:bg-gray-50">
           Where does this data come from?
-          <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <svg aria-label="Toggle answer" class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </summary>
         <div class="px-6 pb-4 text-gray-600 text-sm">
           We use publicly available data from CMS Medicare Physician Fee Schedule (2026), CMS OPPS/ASC rates, geographic practice cost indices (GPCI), and hospital Machine-Readable Files (price transparency data) mandated by the federal government.
@@ -239,7 +239,7 @@ const faqSchema = {
   </section>
 
   <script>
-    const API = 'https://medical-costs-api.david-568.workers.dev';
+    const API = window.__MEDICAL_COSTS_API__ || 'https://medical-costs-api.david-568.workers.dev';
     const searchInput = document.getElementById('procedure-search') as HTMLInputElement;
     const searchResults = document.getElementById('search-results')!;
     const cptCodeInput = document.getElementById('cpt-code') as HTMLInputElement;
@@ -331,6 +331,7 @@ const faqSchema = {
         const params = new URLSearchParams({ code, amount });
         if (state) params.set('state', state);
         const res = await fetch(`${API}/api/bill-check?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
 
         resultsLoading.classList.add('hidden');
@@ -338,15 +339,18 @@ const faqSchema = {
         if (!json.success) {
           resultsError.textContent = json.error || 'Unable to check this bill. Please verify the CPT code.';
           resultsError.classList.remove('hidden');
+          resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
           return;
         }
 
         const d = json.data;
         renderResults(d);
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (err) {
         resultsLoading.classList.add('hidden');
-        resultsError.textContent = 'Network error. Please try again.';
+        resultsError.textContent = 'Unable to check bill. Please try again later.';
         resultsError.classList.remove('hidden');
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
 

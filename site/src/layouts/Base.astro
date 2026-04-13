@@ -15,7 +15,7 @@ interface Props {
 
 const { title, description, canonical, schema, noindex, ogTitle, ogPrice, ogType } = Astro.props;
 const siteUrl = 'https://medical-costs-site.pages.dev';
-const apiUrl = 'https://medical-costs-api.david-568.workers.dev';
+import { API_BASE as apiUrl } from '@/lib/config';
 
 // Build dynamic OG image URL
 const ogParams = new URLSearchParams();
@@ -123,11 +123,14 @@ const breadcrumbSchema = {
     <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
   </head>
   <body>
+    <script is:inline define:vars={{ apiUrl }}>
+      window.__MEDICAL_COSTS_API__ = apiUrl;
+    </script>
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
       <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16">
           <a href="/" class="flex items-center gap-2">
-            <svg class="w-8 h-8 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg aria-label="Dollar sign icon" class="w-8 h-8 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span class="text-xl font-bold text-gray-900">MedicalCosts<span class="text-brand-600">.info</span></span>
@@ -146,7 +149,7 @@ const breadcrumbSchema = {
             <a href="/bill-checker/" class="text-green-600 font-semibold hover:text-green-700 transition-colors">Bill Checker</a>
             <a href="/settlement-calculator/" class="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Settlement</a>
             <!-- Search with autocomplete -->
-            <div class="relative" id="search-container">
+            <div class="relative" id="search-container" data-api-url={apiUrl}>
               <input
                 id="nav-search"
                 type="text"
@@ -164,10 +167,10 @@ const breadcrumbSchema = {
             aria-label="Open menu"
             aria-expanded="false"
           >
-            <svg id="menu-icon-open" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg id="menu-icon-open" aria-label="Open menu" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            <svg id="menu-icon-close" class="w-6 h-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg id="menu-icon-close" aria-label="Close menu" class="w-6 h-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -263,10 +266,9 @@ const breadcrumbSchema = {
 
     <CostList />
 
-    <!-- Cloudflare Web Analytics (free, privacy-friendly, no cookies) -->
-    <!-- To activate: Replace TOKEN with your Cloudflare Web Analytics site token.
-         Get it from: Cloudflare Dashboard > Analytics & Logs > Web Analytics > Add a site -->
-    <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "PLACEHOLDER_CF_WEB_ANALYTICS_TOKEN"}'></script>
+    <!-- Cloudflare Web Analytics: Replace YOUR_TOKEN and uncomment to enable
+    <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "YOUR_TOKEN"}'></script>
+    -->
 
     <script>
       // Mobile menu toggle
@@ -292,7 +294,7 @@ const breadcrumbSchema = {
         if (!input || !dropdown) return;
 
         var debounceTimer: ReturnType<typeof setTimeout> | null = null;
-        var API_URL = 'https://medical-costs-api.david-568.workers.dev/api/search';
+        var API_URL = (window.__MEDICAL_COSTS_API__ || 'https://medical-costs-api.david-568.workers.dev') + '/api/search';
 
         function fmt(n: number | null) {
           if (!n) return '';
@@ -316,7 +318,7 @@ const breadcrumbSchema = {
             html += '<div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Procedures</div>';
             for (var i = 0; i < procs.length; i++) {
               var p = procs[i];
-              var href = p.slug ? '/procedures/' + p.slug + '/' : '/procedures/' + p.code + '/';
+              var href = p.slug ? '/costs/' + p.slug + '/' : '/costs/' + p.code + '/';
               var name = p.consumerName || p.description;
               html += '<a href="' + href + '" class="block px-4 py-2 hover:bg-brand-50 transition-colors border-b border-gray-50">' +
                 '<div class="text-sm font-medium text-gray-900 truncate">' + name + '</div>' +

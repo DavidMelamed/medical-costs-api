@@ -2,7 +2,7 @@
 import Base from '@/layouts/Base.astro';
 import { formatCurrencyFull } from '@/lib/api';
 
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://medical-costs-api.david-568.workers.dev';
+import { API_BASE } from '@/lib/config';
 
 const brand = Astro.url.searchParams.get('brand') || '';
 let comparisonData: any = null;

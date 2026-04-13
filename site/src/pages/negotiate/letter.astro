@@ -149,7 +149,7 @@ const schema = {
   </section>
 
   <script>
-    const API = 'https://medical-costs-api.david-568.workers.dev';
+    const API = window.__MEDICAL_COSTS_API__ || 'https://medical-costs-api.david-568.workers.dev';
 
     function fmt(n: number | null | undefined): string {
       if (n == null) return 'N/A';

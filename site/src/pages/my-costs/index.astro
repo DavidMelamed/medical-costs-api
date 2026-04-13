@@ -211,7 +211,7 @@ const description = 'View and manage your personalized medical cost estimate. Ad
       if (sharedCodes) {
         const codes = sharedCodes.split(',').filter(Boolean);
         if (codes.length > 0) {
-          const API = 'https://medical-costs-api.david-568.workers.dev/api';
+          const API = (window.__MEDICAL_COSTS_API__ || 'https://medical-costs-api.david-568.workers.dev') + '/api';
           // Fetch procedure details for each code
           Promise.all(codes.map(code =>
             fetch(`${API}/procedures/${code}`).then(r => r.json()).catch(() => null)

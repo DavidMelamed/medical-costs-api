@@ -3,7 +3,7 @@
  * Fetches from the Cloudflare Workers D1 API
  */
 
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'https://medical-costs-api.david-568.workers.dev';
+import { API_BASE } from './config';
 
 export interface Procedure {
   id: string;
@@ -69,7 +69,8 @@ async function fetchApi<T>(path: string): Promise<T | null> {
     const res = await fetch(`${API_BASE}/api${path}`);
     if (!res.ok) return null;
     const json = await res.json();
-    return json.success ? json.data : null;
+    if (!json.success || json.data === null || json.data === undefined) return null;
+    return json.data as T;
   } catch {
     return null;
   }

@@ -8,27 +8,44 @@ if (!slug) return Astro.redirect('/procedures/');
 
 // The slug could be a CPT code or a human-readable slug
 // Try as CPT code first, then as a human-readable slug via the by-slug endpoint
-let procedure = await getProcedure(slug);
-
-if (!procedure) {
-  procedure = await getProcedureBySlug(slug);
+let procedure: any = null;
+let fetchError: string | null = null;
+try {
+  procedure = await getProcedure(slug);
+  if (!procedure) {
+    procedure = await getProcedureBySlug(slug);
+  }
+} catch (e) {
+  fetchError = e instanceof Error ? e.message : 'Failed to load procedure data';
 }
 
-// If still not found, redirect to search
-if (!procedure) return Astro.redirect(`/procedures/?search=${encodeURIComponent(slug.replace(/-/g, ' '))}`);
+// If still not found, show error page
+if (!procedure && !fetchError) {
+  fetchError = 'Procedure not found';
+}
 
-const p = procedure as any;
+const p = procedure ? (procedure as any) : null;
 
 // Fetch related procedures, knowledge graph, consumer description, and interesting facts in parallel
-const [relatedProcedures, graphData, consumerDesc, interestingFacts, alternativesData, negotiatedRates, paaQuestions] = await Promise.all([
-  getRelatedProcedures(p.code),
-  getGraphRelationships('procedure', p.code),
-  getConsumerDescription(p.code),
-  getMetricsFacts(),
-  getAlternatives(p.code),
-  getNegotiatedRates(p.code),
-  getPaaQuestions(p.code),
-]);
+let relatedProcedures: any[] = [];
+let graphData: any = null;
+let consumerDesc: any = null;
+let interestingFacts: any[] = [];
+let alternativesData: any = null;
+let negotiatedRates: any = null;
+let paaQuestions: any[] = [];
+
+if (p) {
+  [relatedProcedures, graphData, consumerDesc, interestingFacts, alternativesData, negotiatedRates, paaQuestions] = await Promise.all([
+    getRelatedProcedures(p.code),
+    getGraphRelationships('procedure', p.code),
+    getConsumerDescription(p.code),
+    getMetricsFacts(),
+    getAlternatives(p.code),
+    getNegotiatedRates(p.code),
+    getPaaQuestions(p.code),
+  ]);
+}
 
 // Group negotiated rates by major payer for display
 const topPayers = (negotiatedRates?.byPayer || [])
@@ -163,7 +180,7 @@ const faqSchema = {
             <span class="px-3 py-1 bg-brand-100 text-brand-700 text-sm font-semibold rounded-full">{p.codeType} {p.code}</span>
             {p.category && <span class="text-sm text-gray-500">{p.category}</span>}
           </div>
-          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+          <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4 break-words">
             How Much Does {consumerName || shortName} Cost?
           </h1>
           {consumerName && (
@@ -320,7 +337,7 @@ const faqSchema = {
         <script define:vars={{ procedureCode: p.code }}>
           // Fetch commonly paired procedures from both the graph API and related API
           (async function() {
-            const API = 'https://medical-costs-api.david-568.workers.dev/api';
+            const API = (window.__MEDICAL_COSTS_API__ || 'https://medical-costs-api.david-568.workers.dev') + '/api';
             const container = document.getElementById('commonly-paired-list');
             const section = document.getElementById('commonly-together');
 
