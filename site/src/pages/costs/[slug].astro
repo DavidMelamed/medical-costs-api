@@ -61,6 +61,11 @@ const injuryMappings = p?.injuryMappings || [];
 const commercialEstimates = p?.commercialEstimates || {};
 const procSlug = p ? slugify(p.description) : '';
 
+// Total cost of care estimate (physician + facility + anesthesia + supplies)
+const totalCost = p?.totalCostEstimate || null;
+const isSurgical = totalCost && totalCost.costType === 'total_episode';
+const isCompleteRate = totalCost && totalCost.costType === 'complete_rate';
+
 // Consumer-friendly info (from dedicated endpoint or embedded in procedure response)
 const cd = consumerDesc || p?.consumerDescription || null;
 const consumerName = cd?.consumerName || null;
@@ -74,17 +79,22 @@ const preparationTips = cd?.preparationTips || null;
 const shortName = p ? p.description.replace(/,?\s*each\s+\d+\s+min(utes)?/i, '').replace(/\s+w\/o\s+(dye|contrast)/i, ' without contrast') : slug;
 const priceStr = p?.nationalFacilityRate ? formatCurrencyFull(p.nationalFacilityRate) : null;
 
+const totalCostStr = isSurgical && totalCost
+  ? `${formatCurrencyFull(totalCost.totalLow)} - ${formatCurrencyFull(totalCost.totalHigh)}`
+  : null;
 const title = fetchError
   ? `Procedure Not Found — MedicalCosts.info`
-  : `How Much Does ${shortName} Cost? ${priceStr ? `(${priceStr})` : ''} — 2026 Rates | MedicalCosts.info`;
+  : `How Much Does ${shortName} Cost? ${totalCostStr ? `(${totalCostStr} Total)` : priceStr ? `(${priceStr})` : ''} — 2026 Rates | MedicalCosts.info`;
 const description = fetchError
   ? 'The requested procedure could not be found. Search our database of medical procedure costs.'
-  : `${shortName} (CPT ${p.code}) costs ${priceStr || 'vary by location'}. Medicare facility rate, hospital outpatient price, surgery center cost, and estimated commercial insurance rates. Updated 2026 CMS data.`;
+  : isSurgical && totalCost
+    ? `${shortName} (CPT ${p.code}) total cost: ${totalCostStr} including facility fees, anesthesia, and supplies. Surgeon fee: ${priceStr}. Based on CMS Medicare data, updated 2026.`
+    : `${shortName} (CPT ${p.code}) costs ${priceStr || 'vary by location'}. Medicare facility rate, hospital outpatient price, surgery center cost, and estimated commercial insurance rates. Updated 2026 CMS data.`;
 
 // Build cost comparison data for bar chart
 const costBars: Array<{ label: string; sublabel: string; amount: number; color: string }> = [];
-if (p.nationalFacilityRate) costBars.push({ label: 'Medicare', sublabel: 'Facility rate', amount: p.nationalFacilityRate, color: 'bg-brand-500' });
-if (p.hospitalOutpatientCost) costBars.push({ label: 'Hospital Outpatient', sublabel: 'OPPS rate', amount: p.hospitalOutpatientCost, color: 'bg-purple-500' });
+if (p.nationalFacilityRate) costBars.push({ label: isSurgical ? 'Physician Fee' : 'Medicare', sublabel: isSurgical ? 'Surgeon only' : 'Facility rate', amount: p.nationalFacilityRate, color: 'bg-brand-500' });
+if (p.hospitalOutpatientCost) costBars.push({ label: 'Hospital Facility', sublabel: 'OPPS rate', amount: p.hospitalOutpatientCost, color: 'bg-purple-500' });
 if (p.ascCost) costBars.push({ label: 'Surgery Center', sublabel: 'ASC rate', amount: p.ascCost, color: 'bg-green-500' });
 if (commercialEstimates.facilityLow) costBars.push({ label: 'Commercial Ins.', sublabel: 'Estimated', amount: (commercialEstimates.facilityLow + commercialEstimates.facilityHigh) / 2, color: 'bg-orange-500' });
 const maxCost = Math.max(...costBars.map(b => b.amount), 1);
@@ -102,8 +112,8 @@ const schema = {
   ...(p.nationalFacilityRate && {
     "offers": {
       "@type": "AggregateOffer",
-      "lowPrice": hasNegotiatedRates ? negotiatedRates!.summary.overallMin : p.nationalFacilityRate,
-      "highPrice": hasNegotiatedRates ? negotiatedRates!.summary.overallMax : (commercialEstimates.facilityHigh || p.nationalFacilityRate * 2.5),
+      "lowPrice": isSurgical && totalCost ? totalCost.totalLow : (hasNegotiatedRates ? negotiatedRates!.summary.overallMin : p.nationalFacilityRate),
+      "highPrice": isSurgical && totalCost ? totalCost.totalHigh : (hasNegotiatedRates ? negotiatedRates!.summary.overallMax : (commercialEstimates.facilityHigh || p.nationalFacilityRate * 2.5)),
       "priceCurrency": "USD",
       "offerCount": hasNegotiatedRates ? negotiatedRates!.summary.totalRates : (geoCosts.length || 1),
     }
@@ -207,11 +217,23 @@ const faqSchema = {
             <p class="text-base text-gray-700 mb-3">{plainDescription}</p>
           )}
           <p class="text-lg text-gray-600">
-            {consumerName || p.description} (CPT {p.code}) costs
-            <strong class="text-brand-700">{priceStr || 'vary by location and insurance'}</strong>
-            at Medicare rates.
-            {p.hospitalOutpatientCost && ` Hospital outpatient rate: ${formatCurrencyFull(p.hospitalOutpatientCost)}.`}
-            {commercialEstimates.facilityLow && ` With commercial insurance, expect to pay ${formatCurrencyFull(commercialEstimates.facilityLow)} to ${formatCurrencyFull(commercialEstimates.facilityHigh)}.`}
+            {isSurgical && totalCost ? (
+              <Fragment>
+                The total estimated cost of {consumerName || p.description} (CPT {p.code}) is
+                <strong class="text-amber-700"> {formatCurrencyFull(totalCost.totalLow)} to {formatCurrencyFull(totalCost.totalHigh)}</strong>,
+                including hospital fees, anesthesia, and supplies.
+                The surgeon's Medicare fee alone is {priceStr || 'variable'}.
+                {totalCost.avgDrgPayment && ` Average Medicare total payment: ${formatCurrencyFull(totalCost.avgDrgPayment)}.`}
+              </Fragment>
+            ) : (
+              <Fragment>
+                {consumerName || p.description} (CPT {p.code}) costs
+                <strong class="text-brand-700"> {priceStr || 'vary by location and insurance'}</strong>
+                {' '}at Medicare rates.
+                {p.hospitalOutpatientCost && ` Hospital outpatient rate: ${formatCurrencyFull(p.hospitalOutpatientCost)}.`}
+                {commercialEstimates.facilityLow && ` With commercial insurance, expect to pay ${formatCurrencyFull(commercialEstimates.facilityLow)} to ${formatCurrencyFull(commercialEstimates.facilityHigh)}.`}
+              </Fragment>
+            )}
           </p>
           <button
             data-add-to-list={p.code}
@@ -222,6 +244,75 @@ const faqSchema = {
             <svg class="w-4 h-4 inline -mt-0.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>Add to My List
           </button>
         </div>
+
+        <!-- Total Cost of Care Alert — for surgical procedures -->
+        {isSurgical && totalCost && (
+          <div class="bg-amber-50 border-2 border-amber-400 rounded-xl p-6">
+            <div class="flex items-start gap-3 mb-4">
+              <svg class="w-7 h-7 text-amber-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+              <div>
+                <h2 class="text-xl font-bold text-amber-900 mb-1">Total Estimated Cost of Care</h2>
+                <div class="text-3xl md:text-4xl font-extrabold text-amber-800 mb-2">
+                  {formatCurrencyFull(totalCost.totalLow)} &mdash; {formatCurrencyFull(totalCost.totalHigh)}
+                </div>
+                <p class="text-amber-800 text-sm leading-relaxed mb-4">
+                  This estimate includes hospital facility fees, anesthesia, {totalCost.implantEstimate ? 'implants, ' : ''}and supplies
+                  {totalCost.isInpatient ? ' for an inpatient hospital stay' : ''}.
+                  {totalCost.drgCode && totalCost.avgDrgPayment && (
+                    <span> Based on CMS data for {totalCost.drgDescription} (DRG {totalCost.drgCode}), the average Medicare total payment is <strong>{formatCurrencyFull(totalCost.avgDrgPayment)}</strong>.</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <!-- Cost breakdown -->
+            <div class="grid sm:grid-cols-3 gap-3 mb-4">
+              <div class="bg-white rounded-lg p-3 border border-amber-200">
+                <div class="text-xs text-gray-500 mb-1">Surgeon/Physician Fee</div>
+                <div class="text-lg font-bold text-gray-900">{formatCurrencyFull(totalCost.physicianFee)}</div>
+              </div>
+              {totalCost.hospitalFacilityFee && (
+                <div class="bg-white rounded-lg p-3 border border-amber-200">
+                  <div class="text-xs text-gray-500 mb-1">Hospital Facility Fee</div>
+                  <div class="text-lg font-bold text-gray-900">{formatCurrencyFull(totalCost.hospitalFacilityFee)}</div>
+                </div>
+              )}
+              {totalCost.anesthesiaEstimate && (
+                <div class="bg-white rounded-lg p-3 border border-amber-200">
+                  <div class="text-xs text-gray-500 mb-1">Anesthesia (est.)</div>
+                  <div class="text-lg font-bold text-gray-900">{formatCurrencyFull(totalCost.anesthesiaEstimate)}</div>
+                </div>
+              )}
+              {totalCost.implantEstimate && (
+                <div class="bg-white rounded-lg p-3 border border-amber-200">
+                  <div class="text-xs text-gray-500 mb-1">Implant/Device (est.)</div>
+                  <div class="text-lg font-bold text-gray-900">{formatCurrencyFull(totalCost.implantEstimate)}</div>
+                </div>
+              )}
+            </div>
+
+            <div class="bg-amber-100 rounded-lg p-3 text-xs text-amber-900">
+              <strong>Important:</strong> The physician fee of {formatCurrencyFull(totalCost.physicianFee)} shown in the cost cards below is what Medicare pays the <em>surgeon/doctor</em> only.
+              The hospital charges a separate facility fee that typically makes up 70-85% of the total cost.
+              {totalCost.drgCode && (
+                <span> <a href={`/drg/${totalCost.drgCode}/`} class="text-amber-700 underline hover:text-amber-900">View DRG {totalCost.drgCode} hospital costs</a>.</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <!-- Complete rate notice for non-surgical procedures -->
+        {isCompleteRate && (
+          <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p class="text-sm text-green-800">
+                <strong>The rates shown below represent the complete Medicare reimbursement for this service.</strong>
+                No separate facility fee applies for this type of procedure.
+              </p>
+            </div>
+          </div>
+        )}
 
         <!-- Visual Cost Comparison Bar Chart -->
         {costBars.length >= 2 && (
@@ -252,24 +343,40 @@ const faqSchema = {
         <!-- Cost comparison cards -->
         <div class="grid sm:grid-cols-2 gap-4">
           {p.nationalFacilityRate && (
-            <div class="bg-white rounded-xl border-2 border-brand-500 p-6">
-              <div class="text-sm text-gray-500 mb-1">Medicare (Facility)</div>
+            <div class="bg-white rounded-xl border-2 border-brand-500 p-6 relative">
+              <div class="flex items-center gap-1.5 text-sm text-gray-500 mb-1">
+                {isSurgical ? 'Medicare Physician Fee (Facility Setting)' : 'Medicare (Facility)'}
+                {isSurgical && (
+                  <span class="group relative cursor-help">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span class="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-10">This is what Medicare pays the doctor/surgeon. The hospital charges a separate facility fee that is not included here.</span>
+                  </span>
+                )}
+              </div>
               <div class="text-4xl font-bold text-brand-700">{formatCurrencyFull(p.nationalFacilityRate)}</div>
-              <div class="text-xs text-gray-400 mt-2">CMS PFS 2026 national rate</div>
+              <div class="text-xs text-gray-400 mt-2">
+                {isSurgical ? 'Physician component only — CMS PFS 2026' : 'CMS PFS 2026 national rate'}
+              </div>
             </div>
           )}
           {p.nationalNonFacRate && p.nationalNonFacRate !== p.nationalFacilityRate && (
             <div class="bg-white rounded-xl border border-gray-200 p-6">
-              <div class="text-sm text-gray-500 mb-1">Medicare (Office/Clinic)</div>
+              <div class="text-sm text-gray-500 mb-1">Medicare Physician Fee (Office/Clinic)</div>
               <div class="text-3xl font-bold text-gray-900">{formatCurrencyFull(p.nationalNonFacRate)}</div>
               <div class="text-xs text-gray-400 mt-2">Non-facility setting</div>
             </div>
           )}
           {p.hospitalOutpatientCost && (
             <div class="bg-white rounded-xl border border-gray-200 p-6">
-              <div class="text-sm text-gray-500 mb-1">Hospital Outpatient</div>
+              <div class="flex items-center gap-1.5 text-sm text-gray-500 mb-1">
+                Hospital Outpatient (Facility Fee)
+                <span class="group relative cursor-help">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <span class="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-10">This is what Medicare pays the hospital for the facility and technical component, separate from the physician fee.</span>
+                </span>
+              </div>
               <div class="text-3xl font-bold text-gray-900">{formatCurrencyFull(p.hospitalOutpatientCost)}</div>
-              <div class="text-xs text-gray-400 mt-2">OPPS rate</div>
+              <div class="text-xs text-gray-400 mt-2">OPPS rate — hospital facility component</div>
             </div>
           )}
           {p.ascCost && (

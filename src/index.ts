@@ -293,6 +293,268 @@ async function handleProcedures(url: URL, env: Env, cors: Record<string, string>
 // GET /api/procedures/:code
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Total Cost of Care — CPT-to-DRG mapping for inpatient surgical procedures
+// ---------------------------------------------------------------------------
+
+const CPT_TO_DRG: Record<string, { drgs: string[]; description: string; isInpatient: boolean }> = {
+  // Joint replacements
+  '27447': { drgs: ['470','469'], description: 'Major Hip/Knee Replacement', isInpatient: true },
+  '27446': { drgs: ['470','469'], description: 'Major Hip/Knee Replacement', isInpatient: true },
+  '27130': { drgs: ['470','469'], description: 'Major Hip/Knee Replacement', isInpatient: true },
+  '27132': { drgs: ['470','469'], description: 'Major Hip/Knee Replacement', isInpatient: true },
+  // Spinal fusion
+  '22612': { drgs: ['460','459'], description: 'Spinal Fusion', isInpatient: true },
+  '22630': { drgs: ['460','459'], description: 'Spinal Fusion', isInpatient: true },
+  '22633': { drgs: ['460','459'], description: 'Spinal Fusion', isInpatient: true },
+  '22551': { drgs: ['473','472'], description: 'Cervical Spinal Fusion', isInpatient: true },
+  '22552': { drgs: ['473','472'], description: 'Cervical Spinal Fusion', isInpatient: true },
+  // Cardiac
+  '33533': { drgs: ['236','235'], description: 'CABG', isInpatient: true },
+  '33534': { drgs: ['236','235'], description: 'CABG', isInpatient: true },
+  '33361': { drgs: ['266','265'], description: 'Transcatheter Valve Replacement', isInpatient: true },
+  // Shoulder
+  '23472': { drgs: ['483','482'], description: 'Major Shoulder/Elbow Procedure', isInpatient: true },
+  '23473': { drgs: ['483','482'], description: 'Major Shoulder/Elbow Procedure', isInpatient: true },
+  // Craniotomy
+  '61510': { drgs: ['025','026'], description: 'Craniotomy', isInpatient: true },
+  '61312': { drgs: ['025','026'], description: 'Craniotomy', isInpatient: true },
+  // Appendectomy
+  '44970': { drgs: ['343','342'], description: 'Appendectomy', isInpatient: true },
+  // Cholecystectomy
+  '47562': { drgs: ['418','417'], description: 'Cholecystectomy (Lap)', isInpatient: true },
+  '47563': { drgs: ['418','417'], description: 'Cholecystectomy (Lap)', isInpatient: true },
+  // Hysterectomy
+  '58150': { drgs: ['743','742'], description: 'Hysterectomy', isInpatient: true },
+  '58571': { drgs: ['743','742'], description: 'Hysterectomy', isInpatient: true },
+  // Colectomy
+  '44204': { drgs: ['330','329'], description: 'Major Bowel Procedure', isInpatient: true },
+  '44205': { drgs: ['330','329'], description: 'Major Bowel Procedure', isInpatient: true },
+  // Laminectomy (often outpatient but can be inpatient)
+  '63047': { drgs: ['519','518'], description: 'Back & Neck Procedure', isInpatient: true },
+  '63030': { drgs: ['519','518'], description: 'Back & Neck Procedure', isInpatient: true },
+};
+
+// Categories that are surgery but typically outpatient (no huge facility fee)
+const OUTPATIENT_SURGERY_CATEGORIES = [
+  'Surgery - Integumentary', // skin procedures
+  'Surgery - Eye', // cataract etc (mostly ASC)
+  'Surgery - Ear',
+];
+
+function isSurgicalCategory(category: string | null): boolean {
+  if (!category) return false;
+  return category.startsWith('Surgery');
+}
+
+function isNonSurgicalCategory(category: string | null): boolean {
+  if (!category) return true;
+  const nonSurgical = [
+    'Evaluation and Management', 'Evaluation & Management',
+    'Radiology', 'Pathology', 'Medicine',
+    'Physical Medicine', 'Laboratory', 'Prescription Drug',
+  ];
+  return nonSurgical.some(ns => category.startsWith(ns));
+}
+
+async function computeTotalCostEstimate(
+  code: string,
+  category: string | null,
+  physicianFee: number,
+  hospitalOutpatientCost: number | null,
+  env: Env,
+): Promise<{
+  totalCostEstimate: {
+    physicianFee: number;
+    hospitalFacilityFee: number | null;
+    anesthesiaEstimate: number | null;
+    implantEstimate: number | null;
+    totalLow: number;
+    totalHigh: number;
+    isInpatient: boolean;
+    drgCode: string | null;
+    drgDescription: string | null;
+    avgDrgPayment: number | null;
+    note: string;
+    costType: 'total_episode' | 'physician_fee_only' | 'complete_rate';
+  };
+} | null> {
+  if (!physicianFee || physicianFee <= 0) return null;
+
+  // Check if this is an inpatient procedure with DRG mapping
+  const drgMapping = CPT_TO_DRG[code];
+  if (drgMapping) {
+    // Try to look up DRG cost data
+    for (const drgCode of drgMapping.drgs) {
+      const drgData = await env.DB.prepare(
+        `SELECT drg_code, drg_description, avg_total_costs, avg_total_charges, avg_medicare_payment, total_discharges
+         FROM drg_cost_data WHERE drg_code = ?1 AND source = 'CMS_INPATIENT' LIMIT 1`
+      ).bind(drgCode).first<{
+        drg_code: string; drg_description: string;
+        avg_total_costs: number | null; avg_total_charges: number | null;
+        avg_medicare_payment: number | null; total_discharges: number | null;
+      }>();
+
+      if (drgData) {
+        const avgTotal = drgData.avg_total_costs || drgData.avg_medicare_payment || 0;
+        if (avgTotal > 0) {
+          // For inpatient: DRG total payment is the best estimate
+          // Commercial insurance pays ~180-300% of Medicare for inpatient
+          const totalLow = Math.round(avgTotal * 0.9);
+          const totalHigh = Math.round(avgTotal * 2.5);
+          return {
+            totalCostEstimate: {
+              physicianFee,
+              hospitalFacilityFee: Math.round(avgTotal - physicianFee),
+              anesthesiaEstimate: Math.round(physicianFee * 0.2),
+              implantEstimate: ['27447','27446','27130','27132','23472','23473'].includes(code)
+                ? Math.round(avgTotal * 0.25) : null,
+              totalLow,
+              totalHigh,
+              isInpatient: true,
+              drgCode: drgData.drg_code,
+              drgDescription: drgData.drg_description,
+              avgDrgPayment: Math.round(avgTotal),
+              note: `Estimated total cost of care including hospital facility fee, anesthesia, implants, and supplies. Based on CMS DRG ${drgData.drg_code} average total cost of ${formatUSD(avgTotal)}. The physician fee (${formatUSD(physicianFee)}) is one component of the total.`,
+              costType: 'total_episode',
+            }
+          };
+        }
+      }
+
+      // Fallback: try hospital_drg_costs table (per-provider data, aggregate)
+      const aggData = await env.DB.prepare(
+        `SELECT ROUND(AVG(avg_total_payments), 2) AS avgPayment,
+                ROUND(MIN(avg_total_payments), 2) AS minPayment,
+                ROUND(MAX(avg_total_payments), 2) AS maxPayment,
+                COUNT(*) AS numHospitals
+         FROM hospital_drg_costs WHERE drg_code = ?1`
+      ).bind(drgCode).first<{
+        avgPayment: number | null; minPayment: number | null;
+        maxPayment: number | null; numHospitals: number;
+      }>();
+
+      if (aggData && aggData.avgPayment && aggData.avgPayment > 0) {
+        const totalLow = Math.round(aggData.minPayment || aggData.avgPayment * 0.7);
+        const totalHigh = Math.round((aggData.maxPayment || aggData.avgPayment * 1.5) * 1.5);
+        return {
+          totalCostEstimate: {
+            physicianFee,
+            hospitalFacilityFee: Math.round(aggData.avgPayment - physicianFee),
+            anesthesiaEstimate: Math.round(physicianFee * 0.2),
+            implantEstimate: ['27447','27446','27130','27132','23472','23473'].includes(code)
+              ? Math.round(aggData.avgPayment * 0.25) : null,
+            totalLow,
+            totalHigh,
+            isInpatient: true,
+            drgCode,
+            drgDescription: drgMapping.description,
+            avgDrgPayment: Math.round(aggData.avgPayment),
+            note: `Estimated total cost based on ${aggData.numHospitals} hospital reports for DRG ${drgCode}. Average total payment: ${formatUSD(aggData.avgPayment)}. The physician fee (${formatUSD(physicianFee)}) is one component.`,
+            costType: 'total_episode',
+          }
+        };
+      }
+    }
+
+    // DRG mapping exists but no data found — use multiplier estimate
+    const facilityFee = physicianFee * 5;
+    const anesthesia = physicianFee * 0.2;
+    const sum = physicianFee + facilityFee + anesthesia;
+    return {
+      totalCostEstimate: {
+        physicianFee,
+        hospitalFacilityFee: Math.round(facilityFee),
+        anesthesiaEstimate: Math.round(anesthesia),
+        implantEstimate: null,
+        totalLow: Math.round(sum * 0.8),
+        totalHigh: Math.round(sum * 1.5),
+        isInpatient: true,
+        drgCode: drgMapping.drgs[0],
+        drgDescription: drgMapping.description,
+        avgDrgPayment: null,
+        note: `Estimated total cost of care for this inpatient procedure. The physician/surgeon fee (${formatUSD(physicianFee)}) typically represents 5-15% of the total cost. Hospital facility fees, anesthesia, implants, and supplies make up the remainder.`,
+        costType: 'total_episode',
+      }
+    };
+  }
+
+  // Surgical but not mapped to a DRG — outpatient surgery
+  if (isSurgicalCategory(category)) {
+    const isMinorSurgery = OUTPATIENT_SURGERY_CATEGORIES.some(c => category?.startsWith(c));
+
+    if (isMinorSurgery) {
+      // Minor/outpatient surgery — facility fee is smaller
+      const facilityFee = hospitalOutpatientCost || (physicianFee * 2);
+      const anesthesia = physicianFee > 200 ? Math.round(physicianFee * 0.15) : 0;
+      const sum = physicianFee + facilityFee + anesthesia;
+      return {
+        totalCostEstimate: {
+          physicianFee,
+          hospitalFacilityFee: Math.round(facilityFee),
+          anesthesiaEstimate: anesthesia > 0 ? anesthesia : null,
+          implantEstimate: null,
+          totalLow: Math.round(sum * 0.8),
+          totalHigh: Math.round(sum * 1.3),
+          isInpatient: false,
+          drgCode: null,
+          drgDescription: null,
+          avgDrgPayment: null,
+          note: `Estimated total cost including facility fee and supplies. The physician fee (${formatUSD(physicianFee)}) is one component of the total.`,
+          costType: 'total_episode',
+        }
+      };
+    }
+
+    // General outpatient surgery (arthroscopy, colonoscopy, etc.)
+    const facilityFee = hospitalOutpatientCost || (physicianFee * 3);
+    const anesthesia = Math.round(physicianFee * 0.2);
+    const sum = physicianFee + facilityFee + anesthesia;
+    return {
+      totalCostEstimate: {
+        physicianFee,
+        hospitalFacilityFee: Math.round(facilityFee),
+        anesthesiaEstimate: anesthesia,
+        implantEstimate: null,
+        totalLow: Math.round(sum * 0.8),
+        totalHigh: Math.round(sum * 1.5),
+        isInpatient: false,
+        drgCode: null,
+        drgDescription: null,
+        avgDrgPayment: null,
+        note: `Estimated total cost including facility fee, anesthesia, and supplies. The physician fee (${formatUSD(physicianFee)}) is one component of the total.`,
+        costType: 'total_episode',
+      }
+    };
+  }
+
+  // Non-surgical — the fee shown is closer to the total cost
+  if (isNonSurgicalCategory(category)) {
+    return {
+      totalCostEstimate: {
+        physicianFee,
+        hospitalFacilityFee: null,
+        anesthesiaEstimate: null,
+        implantEstimate: null,
+        totalLow: physicianFee,
+        totalHigh: physicianFee,
+        isInpatient: false,
+        drgCode: null,
+        drgDescription: null,
+        avgDrgPayment: null,
+        note: 'The rates shown represent the complete Medicare reimbursement for this service.',
+        costType: 'complete_rate',
+      }
+    };
+  }
+
+  return null;
+}
+
+function formatUSD(amount: number): string {
+  return '$' + amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
 async function handleProcedureDetail(code: string, env: Env, cors: Record<string, string>): Promise<Response> {
   const proc = await env.DB.prepare(
     `SELECT
@@ -355,7 +617,19 @@ async function handleProcedureDetail(code: string, env: Env, cors: Record<string
     high: Math.round(nationalRate * 2.5 * 100) / 100,
   };
 
-  return success({ ...proc, commercialEstimates, geographicCosts: geoCosts, injuryMappings, consumerDescription: consumer || null }, cors);
+  // Compute total cost of care estimate (physician + facility + anesthesia + supplies)
+  const category = (proc as Record<string, unknown>).category as string | null;
+  const hospOutpatient = (proc as Record<string, unknown>).hospitalOutpatientCost as number | null;
+  const totalCostData = await computeTotalCostEstimate(code, category, nationalRate, hospOutpatient, env);
+
+  return success({
+    ...proc,
+    commercialEstimates,
+    geographicCosts: geoCosts,
+    injuryMappings,
+    consumerDescription: consumer || null,
+    ...(totalCostData || {}),
+  }, cors);
 }
 
 // ---------------------------------------------------------------------------
